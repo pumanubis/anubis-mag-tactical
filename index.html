@@ -1,0 +1,113 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#151b14">
+<title>ANUBIS MAG TACTICAL</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;background:#111610;color:#eee;
+ font-family:Arial,sans-serif;
+}
+header{
+ background:#1d281c;border-bottom:2px solid #b59a45;
+ padding:22px;text-align:center;
+}
+header h1{color:#d5bd68;letter-spacing:3px}
+header p{color:#b5c2a9;font-size:12px}
+main{max-width:550px;margin:25px auto;padding:15px}
+.panel{
+ background:#20291e;border:1px solid #59634b;
+ border-radius:12px;padding:22px;margin-bottom:18px;
+}
+h2{color:#d5bd68;font-size:18px}
+input,select{
+ width:100%;padding:14px;margin:9px 0;
+ border-radius:7px;border:1px solid #66725a;
+ background:#111610;color:white;font-size:16px;
+}
+button{
+ width:100%;padding:15px;margin-top:10px;
+ background:#687b42;color:white;border:0;
+ border-radius:7px;font-weight:bold;font-size:15px;
+ cursor:pointer;
+}
+button.secondary{background:#394735}
+.small{text-align:center;color:#9ba58e;font-size:12px}
+#dashboard{display:none}
+.gold{color:#d5bd68}
+</style>
+</head>
+<body>
+
+<header>
+<h1>ANUBIS MAG</h1>
+<p>TACTICAL SYSTEM · AIRSOFT MILSIM</p>
+</header>
+
+<main>
+<section id="login" class="panel">
+<h2>ACCESO TÁCTICO</h2>
+<p>Ingresa tu PIN de jugador de 4 dígitos.</p>
+<input id="pin" type="password" inputmode="numeric"
+maxlength="4" placeholder="PIN de 4 dígitos">
+<button onclick="login()">INGRESAR</button>
+<p class="small">Sistema de acceso en configuración inicial</p>
+</section>
+
+<section id="dashboard">
+<div class="panel">
+<h2>BIENVENIDO AL SISTEMA</h2>
+<p class="gold">ANUBIS MAG TACTICAL</p>
+<p>Panel principal de operaciones.</p>
+</div>
+
+<div class="panel">
+<h2>PARTIDAS</h2>
+<input id="gameName" placeholder="Nombre de la partida">
+<select id="teamCount">
+<option value="2">2 equipos</option>
+<option value="3">3 equipos</option>
+</select>
+<button onclick="createGame()">CREAR PARTIDA</button>
+<p id="gameStatus" class="small"></p>
+</div>
+
+<div class="panel">
+<h2>FUNCIONES TÁCTICAS</h2>
+<button class="secondary">UBICACIÓN GPS</button>
+<button class="secondary">MIS EQUIPOS</button>
+<button class="secondary">CAPTURAR OBJETIVO QR</button>
+<button class="secondary">MAPA DE OPERACIONES</button>
+<p class="small">Funciones pendientes de conexión con Supabase.</p>
+</div>
+
+<button onclick="logout()">CERRAR SESIÓN</button>
+</section>
+</main>
+
+<script>
+function login(){
+ const pin=document.getElementById('pin').value;
+ if(!/^[0-9]{4}$/.test(pin)){
+  alert('Ingresa un PIN de 4 dígitos');
+  return;
+ }
+ alert('Esta es una vista inicial. El acceso real se activará al conectar Supabase.');
+}
+function createGame(){
+ const name=document.getElementById('gameName').value.trim();
+ if(!name){alert('Escribe el nombre de la partida');return;}
+ document.getElementById('gameStatus').textContent=
+ 'Partida preparada: '+name+' · '+document.getElementById('teamCount').value+' equipos. Vista de prueba.';
+}
+function logout(){
+ document.getElementById('dashboard').style.display='none';
+ document.getElementById('login').style.display='block';
+}
+</script>
+</body>
+</html>
