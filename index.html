@@ -40,7 +40,7 @@ button.secondary{background:#394735}
 #dashboard{display:none}
 .gold{color:#d5bd68}
 </style>
-</head>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script></head>
 <body>
 
 <header>
@@ -92,6 +92,14 @@ maxlength="4" placeholder="PIN de 4 dígitos">
 </main>
 
 <script>
+ const SUPABASE_URL = 'https://qpdbswjjlpgczpubefst.supabase.co';
+
+const SUPABASE_KEY = 'sb_publishable_k-y-PRQyuSWGXiuyHqP5aw_RQlZySZ4';
+
+const supabaseClient = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
 function login(){
  const pin=document.getElementById('pin').value;
  if(!/^[0-9]{4}$/.test(pin)){
