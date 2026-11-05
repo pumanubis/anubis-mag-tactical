@@ -181,13 +181,7 @@ const supabaseClient = window.supabase.createClient(
     alert(error.message || 'Error de conexión con Supabase.');
   }
 }
- const pin=document.getElementById('pin').value;
- if(!/^[0-9]{4}$/.test(pin)){
-  alert('Ingresa un PIN de 4 dígitos');
-  return;
- }
- alert('Esta es una vista inicial. El acceso real se activará al conectar Supabase.');
-}
+ 
 function createGame(){
  const name=document.getElementById('gameName').value.trim();
  if(!name){alert('Escribe el nombre de la partida');return;}
