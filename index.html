@@ -53,11 +53,26 @@ style="width:150px;max-width:45%;height:auto;display:block;margin:0 auto 15px;">
 <main>
 <section id="login" class="panel">
 <h2>ACCESO TÁCTICO</h2>
-<p>Ingresa tu PIN de jugador de 4 dígitos.</p>
-<input id="pin" type="password" inputmode="numeric"
-maxlength="4" placeholder="PIN de 4 dígitos">
+<p>Ingresa tu usuario y PIN de acceso.</p>
+
+<input
+  id="username"
+  type="text"
+  autocomplete="username"
+  placeholder="Usuario"
+  maxlength="50"
+>
+
+<input
+  id="pin"
+  type="password"
+  inputmode="numeric"
+  maxlength="4"
+  placeholder="PIN de 4 dígitos"
+>
+
 <button onclick="login()">INGRESAR</button>
-<p class="small">Sistema de acceso en configuración inicial</p>
+<p class="small">Acceso seguro ANUBIS MAG</p>
 </section>
 
 <section id="dashboard">
@@ -99,8 +114,73 @@ const SUPABASE_KEY = 'sb_publishable_k-y-PRQyuSWGXiuyHqP5aw_RQlZySZ4';
 const supabaseClient = window.supabase.createClient(
   SUPABASE_URL,
   SUPABASE_KEY
-);
-function login(){
+);async function login() {
+  const username = document
+    .getElementById('username').value.trim().toLowerCase();
+
+  const pin = document.getElementById('pin').value;
+
+  if (!username || !/^[0-9]{4}$/.test(pin)) {
+    alert('Ingresa tu usuario y PIN de 4 dígitos.');
+    return;
+  }
+
+  try {
+    const { data, error } =
+      await supabaseClient.functions.invoke('tactical-auth', {
+        body: {
+          username: username,
+          pin: pin
+        }
+      });
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data || !data.success || !data.token_hash) {
+      throw new Error(data?.error || 'No se pudo autenticar.');
+    }
+
+    const { data: authData, error: authError } =
+      await supabaseClient.auth.verifyOtp({
+        token_hash: data.token_hash,
+        type: data.type || 'magiclink'
+      });
+
+    if (authError || !authData.user) {
+      throw new Error(
+        authError?.message || 'No se pudo iniciar la sesión.'
+      );
+    }
+
+    const { data: profile, error: profileError } =
+      await supabaseClient
+        .from('profiles')
+        .select('nickname, role')
+        .eq('id', authData.user.id)
+        .single();
+
+    if (profileError || !profile) {
+      await supabaseClient.auth.signOut();
+      throw new Error('No se pudo verificar el perfil.');
+    }
+
+    if (profile.role !== 'admin') {
+      await supabaseClient.auth.signOut();
+      throw new Error('Este acceso está reservado al administrador.');
+    }
+
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+
+    alert('Bienvenido, administrador ' + profile.nickname);
+
+  } catch (error) {
+    console.error('Error de acceso:', error);
+    alert(error.message || 'Error de conexión con Supabase.');
+  }
+}
  const pin=document.getElementById('pin').value;
  if(!/^[0-9]{4}$/.test(pin)){
   alert('Ingresa un PIN de 4 dígitos');
