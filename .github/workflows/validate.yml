@@ -1,0 +1,31 @@
+name: Validate ANUBIS MAG TACTICAL
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate inline JavaScript and app essentials
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('index.html', 'utf8');
+          const scripts = [...html.matchAll(/<script>([\\s\\S]*?)<\\/script>/gi)];
+          if (!scripts.length) throw new Error('No inline application script found');
+          scripts.forEach((match, i) => {
+            const file = `/tmp/anubis-inline-${i}.js`;
+            fs.writeFileSync(file, match[1]);
+            require('node:child_process').execFileSync(process.execPath, ['--check', file], {stdio:'inherit'});
+          });
+          for (const marker of ['create_game_with_teams','admin-create-player','capture-objective','manifest.webmanifest']) {
+            if (!html.includes(marker)) throw new Error('Missing app integration: ' + marker);
+          }
+          console.log('ANUBIS MAG TACTICAL: JavaScript syntax and app integrations OK');
+          NODE
