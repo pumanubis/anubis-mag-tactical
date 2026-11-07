@@ -208,7 +208,7 @@ async function loadPlayerGame(){
   const snap=JSON.parse(localStorage.getItem("anubis_player_"+currentUser.id)||"null");
   if(!snap){$("playerGameInfo").textContent="Para preparar el modo sin conexión, abre esta operación mientras tengas internet.";return;}
   currentGame=snap.game;currentTeams=[snap.team];currentPlayers=[snap.gp];
-  renderPlayerSnapshot(snap,true);return;
+  renderPlayerSnapshot(snap,true);await loadPlayerMap();return;
  }
  const {data:gp,error}=await db.from("game_players").select("id,game_id,team_id,callsign,status").eq("user_id",currentUser.id).eq("status","active").order("joined_at",{ascending:false}).limit(1).maybeSingle();
  if(error||!gp){$("playerGameInfo").textContent="No tienes una partida activa asignada. Contacta al administrador.";return;}
@@ -296,6 +296,6 @@ async function syncPendingCaptures(){
 }
 (async()=>{const {data:{session}}=await db.auth.getSession();if(session?.user){try{await enterApp(session.user);}catch(e){await logout();msg("loginMsg",e.message);}}})();
 window.addEventListener("online",async()=>{await syncPendingCaptures();const loc=JSON.parse(localStorage.getItem("anubis_location_queue")||"null");if(loc&&currentUser){const {error}=await db.from("player_locations").upsert(loc,{onConflict:"game_id,user_id"});if(!error){localStorage.removeItem("anubis_location_queue");msg("playerStatus","Ubicación compartida al recuperar internet.");}}});
-if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));}
+if("serviceWorker" in navigator){window.addEventListener("load",()=>{navigator.serviceWorker.register("./sw.js").then(()=>{if(!navigator.serviceWorker.controller){navigator.serviceWorker.addEventListener("controllerchange",()=>{if(!sessionStorage.getItem("anubis-sw-ready")){sessionStorage.setItem("anubis-sw-ready","1");location.reload();}});}}).catch(()=>{});});}
 </script>
 </body></html>
