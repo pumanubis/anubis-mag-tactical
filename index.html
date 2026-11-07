@@ -86,8 +86,9 @@ style="width:150px;max-width:45%;height:auto;display:block;margin:0 auto 15px;">
 <h2>PARTIDAS</h2>
 <input id="gameName" placeholder="Nombre de la partida">
 <select id="teamCount">
-<option value="2">2 equipos</option>
-<option value="3">3 equipos</option>
+  <option value="2">2 equipos</option>
+  <option value="3">3 equipos</option>
+  <option value="4">4 equipos</option>
 </select>
 <button onclick="createGame()">CREAR PARTIDA</button>
 <p id="gameStatus" class="small"></p>
@@ -182,11 +183,77 @@ const supabaseClient = window.supabase.createClient(
   }
 }
  
-function createGame(){
- const name=document.getElementById('gameName').value.trim();
- if(!name){alert('Escribe el nombre de la partida');return;}
- document.getElementById('gameStatus').textContent=
- 'Partida preparada: '+name+' · '+document.getElementById('teamCount').value+' equipos. Vista de prueba.';
+async function createGame() {
+  const name = document.getElementById('gameName').value.trim();
+  const teamCount = Number(
+    document.getElementById('teamCount').value
+  );
+
+  const status = document.getElementById('gameStatus');
+
+  if (!name) {
+    alert('Escribe el nombre de la partida.');
+    return;
+  }
+
+  try {
+    status.textContent = 'Creando partida...';
+
+    const { data: sessionData } =
+      await supabaseClient.auth.getSession();
+
+    const user = sessionData.session?.user;
+
+    if (!user) {
+      throw new Error('Debes iniciar sesión nuevamente.');
+    }
+
+    const { data: game, error: gameError } =
+      await supabaseClient
+        .from('games')
+        .insert({
+          name: name,
+          team_count: teamCount,
+          created_by: user.id
+        })
+        .select()
+        .single();
+
+    if (gameError) throw gameError;
+
+    const colors = [
+      '#3B82F6',
+      '#DC2626',
+      '#16A34A',
+      '#EAB308'
+    ];
+
+    const teams = Array.from(
+      { length: teamCount },
+      (_, i) => ({
+        game_id: game.id,
+        name: 'Equipo ' + (i + 1),
+        color: colors[i]
+      })
+    );
+
+    const { error: teamsError } =
+      await supabaseClient
+        .from('teams')
+        .insert(teams);
+
+    if (teamsError) throw teamsError;
+
+    status.textContent =
+      '¡Partida creada correctamente! ID: ' + game.id;
+
+    alert('Partida y equipos creados en Supabase.');
+
+  } catch (error) {
+    console.error(error);
+    status.textContent = 'Error: ' + error.message;
+    alert(error.message);
+  }
 }
 function logout(){
  document.getElementById('dashboard').style.display='none';
