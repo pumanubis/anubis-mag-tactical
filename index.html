@@ -126,11 +126,19 @@ async function login(){
  }catch(e){msg("loginMsg",e.message||"Error de acceso.");}finally{$("loginBtn").disabled=false;}
 }
 async function enterApp(user){
- currentUser=user;const {data:profile,error}=await db.from("profiles").select("nickname,role").eq("id",user.id).single();
- if(error||!profile)throw new Error("No se pudo cargar el perfil.");
+ currentUser=user;let profile=null;
+ if(navigator.onLine){
+  const result=await db.from("profiles").select("nickname,role").eq("id",user.id).single();
+  if(result.error||!result.data)throw new Error("No se pudo cargar el perfil.");
+  profile=result.data;localStorage.setItem("anubis_profile_"+user.id,JSON.stringify(profile));
+ }else{
+  profile=JSON.parse(localStorage.getItem("anubis_profile_"+user.id)||"null");
+  if(!profile)throw new Error("Conéctate una vez a internet para cargar tu perfil y preparar el modo sin conexión.");
+ }
  currentProfile=profile;$("login").classList.add("hidden");$("app").classList.remove("hidden");$("welcome").textContent="BIENVENIDO, "+profile.nickname.toUpperCase();$("roleTag").textContent=profile.role==="admin"?"ADMINISTRADOR":"OPERADOR";
- if(profile.role==="admin"){$("adminView").classList.remove("hidden");$("playerView").classList.add("hidden");await loadGames();}
+ if(profile.role==="admin"){$("adminView").classList.remove("hidden");$("playerView").classList.add("hidden");if(navigator.onLine)await loadGames();else $("gamesList").textContent="Sin conexión. Las operaciones se actualizarán al recuperar internet.";}
  else{$("playerView").classList.remove("hidden");$("adminView").classList.add("hidden");await loadPlayerGame();}
+ if(navigator.onLine)syncPendingCaptures();
 }
 async function logout(){await stopScanner();await db.auth.signOut();currentUser=null;currentProfile=null;currentGame=null;$("app").classList.add("hidden");$("login").classList.remove("hidden");$("pin").value="";}
 async function createGame(){
@@ -196,28 +204,55 @@ function renderAdminMap(){
  pts.forEach(o=>{L.marker([o.latitude,o.longitude]).addTo(mapAdmin).bindPopup(escapeHtml(o.name));L.circle([o.latitude,o.longitude],{radius:o.radius_m,color:"#d5bd68"}).addTo(mapAdmin);});setTimeout(()=>mapAdmin.invalidateSize(),200);
 }
 async function loadPlayerGame(){
+ if(!navigator.onLine){
+  const snap=JSON.parse(localStorage.getItem("anubis_player_"+currentUser.id)||"null");
+  if(!snap){$("playerGameInfo").textContent="Para preparar el modo sin conexión, abre esta operación mientras tengas internet.";return;}
+  currentGame=snap.game;currentTeams=[snap.team];currentPlayers=[snap.gp];
+  renderPlayerSnapshot(snap,true);return;
+ }
  const {data:gp,error}=await db.from("game_players").select("id,game_id,team_id,callsign,status").eq("user_id",currentUser.id).eq("status","active").order("joined_at",{ascending:false}).limit(1).maybeSingle();
  if(error||!gp){$("playerGameInfo").textContent="No tienes una partida activa asignada. Contacta al administrador.";return;}
- const [g,t,a]=await Promise.all([db.from("games").select("*").eq("id",gp.game_id).single(),db.from("teams").select("*").eq("id",gp.team_id).single(),db.from("objective_assignments").select("id,status,is_secret,sequence_order,unlocked_at,objectives(id,name,status,latitude,longitude,radius_m,visual_description,ar_asset_url)").eq("player_id",gp.id).not("unlocked_at","is",null).order("sequence_order")]);
- if(g.error||t.error){$("playerGameInfo").textContent="No se pudo cargar la operación.";return;}
- currentGame=g.data;currentTeams=[t.data];currentPlayers=[gp];$("playerGameInfo").innerHTML="<b>"+escapeHtml(g.data.name)+"</b><br>Indicativo: "+escapeHtml(gp.callsign)+" · Equipo: "+escapeHtml(t.data.name)+" <span class='tag "+t.data.color+"'>"+(colors[t.data.color]||t.data.color)+"</span><br>Estado: "+g.data.status;
- $("playerStatus").textContent=g.data.status==="active"?"Operación en curso. Mantén tu ubicación compartida para apoyar al equipo.":"La operación no está activa.";
- const assignments=a.data||[];$("myObjectives").innerHTML=assignments.length?assignments.map(x=>{const o=x.objectives||{};return '<div class="card"><div class="topline"><b>'+escapeHtml(o.name||"Misión")+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+(o.status==="captured"?"CAPTURADO":x.status.toUpperCase())+'</span></div>'+(x.is_secret?'<span class="tag yellow">MISIÓN SECRETA</span>':"")+'<p class="small">'+(o.latitude!=null?"GPS: "+Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+'</p>'+(o.visual_description?'<p>'+escapeHtml(o.visual_description)+'</p>':"")+(o.ar_asset_url?'<button class="secondary" onclick="showAR(\''+encodeURIComponent(o.ar_asset_url)+'\',\''+escapeHtml(o.name)+'\')">VER OBJETO 3D / RA</button>':"")+'</div>';}).join(""):"No tienes misiones asignadas todavía.";
+ const [g,t,a,o]=await Promise.all([
+  db.from("games").select("*").eq("id",gp.game_id).single(),
+  db.from("teams").select("*").eq("id",gp.team_id).single(),
+  db.from("objective_assignments").select("id,status,is_secret,sequence_order,unlocked_at,objectives(id,name,status,latitude,longitude,radius_m,visual_description,ar_asset_url)").eq("player_id",gp.id).not("unlocked_at","is",null).order("sequence_order"),
+  db.from("objectives").select("id,name,token_hash,status,latitude,longitude,radius_m,visual_description,ar_asset_url").eq("game_id",gp.game_id)
+ ]);
+ if(g.error||t.error||a.error||o.error){$("playerGameInfo").textContent="No se pudo cargar la operación.";return;}
+ currentGame=g.data;currentTeams=[t.data];currentPlayers=[gp];
+ const snap={gp,game:g.data,team:t.data,assignments:a.data||[],objectives:o.data||[]};
+ localStorage.setItem("anubis_player_"+currentUser.id,JSON.stringify(snap));
+ localStorage.setItem("anubis_tokens_"+gp.game_id,JSON.stringify((o.data||[]).filter(x=>x.token_hash).map(x=>({id:x.id,name:x.name,token_hash:x.token_hash,status:x.status}))));
+ renderPlayerSnapshot(snap,false);await loadPlayerMap();
+}
+function renderPlayerSnapshot(snap,offline){
+ const gp=snap.gp,g=snap.game,t=snap.team,assignments=snap.assignments||[];
+ currentGame=g;currentTeams=[t];currentPlayers=[gp];
+ $("playerGameInfo").innerHTML="<b>"+escapeHtml(g.name)+"</b><br>Indicativo: "+escapeHtml(gp.callsign)+" · Equipo: "+escapeHtml(t.name)+" <span class='tag "+t.color+"'>"+(colors[t.color]||t.color)+"</span><br>Estado: "+g.status;
+ $("playerStatus").textContent=offline?"MODO SIN CONEXIÓN. Los escaneos quedarán pendientes y se sincronizarán al recuperar internet.":(g.status==="active"?"Operación en curso. Mantén tu ubicación compartida para apoyar al equipo.":"La operación no está activa.");
+ $("myObjectives").innerHTML=assignments.length?assignments.map(x=>{const o=x.objectives||{};return '<div class="card"><div class="topline"><b>'+escapeHtml(o.name||"Misión")+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+(o.status==="captured"?"CAPTURADO":x.status.toUpperCase())+'</span></div>'+(x.is_secret?'<span class="tag yellow">MISIÓN SECRETA</span>':"")+'<p class="small">'+(o.latitude!=null?"GPS: "+Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+'</p>'+(o.visual_description?'<p>'+escapeHtml(o.visual_description)+'</p>':"")+(o.ar_asset_url?'<button class="secondary" onclick="showAR(\''+encodeURIComponent(o.ar_asset_url)+'\',\''+escapeHtml(o.name)+'\')">VER OBJETO 3D / RA</button>':"")+'</div>';}).join(""):"No tienes misiones asignadas todavía.";
  $("arArea").textContent="Los modelos 3D se abrirán aquí cuando una misión tenga un archivo GLB/GLTF configurado por el administrador.";
- await loadPlayerMap();
 }
 function showAR(url,name){const src=decodeURIComponent(url);$("arArea").innerHTML='<h3>'+escapeHtml(name)+'</h3><model-viewer src="'+escapeHtml(src)+'" ar ar-modes="webxr scene-viewer quick-look" camera-controls auto-rotate shadow-intensity="1" style="width:100%;height:360px;background:#111a10;border-radius:10px" alt="Modelo 3D del objetivo"></model-viewer><p class="small">Si el equipo es compatible, pulsa el icono AR del visor para colocar el objeto en el entorno real.</p>';if(!document.querySelector('script[data-modelviewer]')){const s=document.createElement("script");s.type="module";s.src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js";s.dataset.modelviewer="1";document.head.appendChild(s);}}
 async function shareLocation(){
  if(!currentGame||!navigator.geolocation){alert("GPS no disponible.");return;}
- navigator.geolocation.getCurrentPosition(async p=>{const payload={game_id:currentGame.id,user_id:currentUser.id,latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy_m:p.coords.accuracy,updated_at:new Date().toISOString()};const {error}=await db.from("player_locations").upsert(payload,{onConflict:"game_id,user_id"});if(error){msg("playerStatus",error.message);return;}msg("playerStatus","Ubicación compartida con tu equipo. Precisión aproximada: "+Math.round(p.coords.accuracy)+" m.");await loadPlayerMap();},e=>msg("playerStatus","No se pudo obtener GPS: "+e.message),{enableHighAccuracy:true,timeout:15000,maximumAge:5000});
+ navigator.geolocation.getCurrentPosition(async p=>{
+  const payload={game_id:currentGame.id,user_id:currentUser.id,latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy_m:p.coords.accuracy,updated_at:new Date().toISOString()};
+  if(!navigator.onLine){localStorage.setItem("anubis_location_queue",JSON.stringify(payload));msg("playerStatus","Ubicación guardada en el dispositivo. Se compartirá cuando vuelva internet.");return;}
+  const {error}=await db.from("player_locations").upsert(payload,{onConflict:"game_id,user_id"});if(error){msg("playerStatus",error.message);return;}msg("playerStatus","Ubicación compartida con tu equipo. Precisión aproximada: "+Math.round(p.coords.accuracy)+" m.");await loadPlayerMap();
+ },e=>msg("playerStatus","No se pudo obtener GPS: "+e.message),{enableHighAccuracy:true,timeout:15000,maximumAge:5000});
 }
 async function loadPlayerMap(){
  if(!currentGame||!window.L)return;
- const [o,l,p]=await Promise.all([db.from("objectives").select("name,latitude,longitude,status,radius_m").eq("game_id",currentGame.id).eq("status","available"),db.from("player_locations").select("user_id,latitude,longitude,updated_at").eq("game_id",currentGame.id),db.from("game_players").select("user_id,callsign").eq("game_id",currentGame.id).eq("team_id",currentTeams[0].id).eq("status","active")]);
- const teamIds=new Set((p.data||[]).map(x=>x.user_id));const locs=(l.data||[]).filter(x=>teamIds.has(x.user_id));const pts=[...(o.data||[]).filter(x=>x.latitude!=null).map(x=>[x.latitude,x.longitude]),...locs.map(x=>[x.latitude,x.longitude])];
+ let objectives=[],locs=[],names=new Map();
+ if(navigator.onLine){
+  const [o,l,p]=await Promise.all([db.from("objectives").select("name,latitude,longitude,status,radius_m").eq("game_id",currentGame.id).eq("status","available"),db.from("player_locations").select("user_id,latitude,longitude,updated_at").eq("game_id",currentGame.id),db.from("game_players").select("user_id,callsign").eq("game_id",currentGame.id).eq("team_id",currentTeams[0].id).eq("status","active")]);
+  objectives=o.data||[];const teamIds=new Set((p.data||[]).map(x=>x.user_id));locs=(l.data||[]).filter(x=>teamIds.has(x.user_id));names=new Map((p.data||[]).map(x=>[x.user_id,x.callsign]));
+ }else{const snap=JSON.parse(localStorage.getItem("anubis_player_"+currentUser.id)||"null");objectives=(snap?.objectives||[]).filter(x=>x.status!=="captured");}
+ const pts=[...objectives.filter(x=>x.latitude!=null).map(x=>[x.latitude,x.longitude]),...locs.map(x=>[x.latitude,x.longitude])];
  if(!mapPlayer){mapPlayer=L.map("playerMap").setView(pts.length?pts[0]:[4.65,-74.1],pts.length?14:5);L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap"}).addTo(mapPlayer);}else{mapPlayer.eachLayer(l=>{if(l instanceof L.Marker||l instanceof L.Circle)L.removeLayer(l);});}
- (o.data||[]).filter(x=>x.latitude!=null).forEach(x=>L.marker([x.latitude,x.longitude]).addTo(mapPlayer).bindPopup("Objetivo: "+escapeHtml(x.name)));
- const names=new Map((p.data||[]).map(x=>[x.user_id,x.callsign]));locs.forEach(x=>L.circleMarker([x.latitude,x.longitude],{radius:8,color:"#8bb8e8"}).addTo(mapPlayer).bindPopup("Compañero: "+escapeHtml(names.get(x.user_id)||"Operador")));
+ objectives.filter(x=>x.latitude!=null).forEach(x=>L.marker([x.latitude,x.longitude]).addTo(mapPlayer).bindPopup("Objetivo: "+escapeHtml(x.name)));
+ locs.forEach(x=>L.circleMarker([x.latitude,x.longitude],{radius:8,color:"#8bb8e8"}).addTo(mapPlayer).bindPopup("Compañero: "+escapeHtml(names.get(x.user_id)||"Operador")));
  setTimeout(()=>mapPlayer.invalidateSize(),250);
 }
 async function startScanner(){
@@ -227,9 +262,40 @@ async function startScanner(){
 }
 async function stopScanner(){if(scanner){try{if(scanner.isScanning)await scanner.stop();await scanner.clear();}catch{}scanner=null;}}
 async function captureObjective(raw){
- const {data,error}=await db.functions.invoke("capture-objective",{body:{token:raw}});if(error){msg("captureMsg",error.message);return;}if(!data?.success){msg("captureMsg",data?.error||"No se pudo capturar.");return;}msg("captureMsg","¡OBJETIVO CAPTURADO! "+data.objective+" · Desaparece para todos los equipos.");await loadPlayerGame();
+ const hash=await sha256(raw),known=JSON.parse(localStorage.getItem("anubis_tokens_"+(currentGame?.id||""))||"[]"),objective=known.find(x=>x.token_hash===hash);
+ if(!objective){msg("captureMsg","QR no válido para esta operación.");return;}
+ if(objective.status==="captured"){msg("captureMsg","Este objetivo ya figura como capturado.");return;}
+ if(!navigator.onLine){
+  const queue=JSON.parse(localStorage.getItem("anubis_capture_queue")||"[]");
+  if(!queue.some(x=>x.token===raw&&x.game_id===currentGame.id))queue.push({token:raw,game_id:currentGame.id,objective_id:objective.id,name:objective.name,created_at:new Date().toISOString()});
+  localStorage.setItem("anubis_capture_queue",JSON.stringify(queue));
+  const snap=JSON.parse(localStorage.getItem("anubis_player_"+currentUser.id)||"null");
+  if(snap){snap.objectives=(snap.objectives||[]).map(x=>x.id===objective.id?{...x,status:"captured"}:x);localStorage.setItem("anubis_player_"+currentUser.id,JSON.stringify(snap));}
+  msg("captureMsg","CAPTURA GUARDADA SIN CONEXIÓN: "+objective.name+". Se validará y sincronizará al recuperar internet.");
+  return;
+ }
+ const {data,error}=await db.functions.invoke("capture-objective",{body:{token:raw}});
+ if(error){msg("captureMsg",error.message);return;}
+ if(!data?.success){msg("captureMsg",data?.error||"No se pudo capturar.");return;}
+ known.forEach(x=>{if(x.id===objective.id)x.status="captured";});localStorage.setItem("anubis_tokens_"+currentGame.id,JSON.stringify(known));
+ msg("captureMsg","¡OBJETIVO CAPTURADO! "+data.objective+" · Desaparece para todos los equipos.");await loadPlayerGame();
+}
+async function syncPendingCaptures(){
+ if(!navigator.onLine||!currentUser||currentProfile?.role!=="player")return;
+ let queue=JSON.parse(localStorage.getItem("anubis_capture_queue")||"[]");if(!queue.length)return;
+ const remaining=[];
+ for(const item of queue){
+  try{const {data,error}=await db.functions.invoke("capture-objective",{body:{token:item.token}});
+   if(error||!data?.success){item.last_error=data?.error||error?.message||"Pendiente de validar";remaining.push(item);}
+   else{const cache=JSON.parse(localStorage.getItem("anubis_tokens_"+item.game_id)||"[]");cache.forEach(x=>{if(x.id===item.objective_id)x.status="captured";});localStorage.setItem("anubis_tokens_"+item.game_id,JSON.stringify(cache));}
+  }catch{remaining.push(item);}
+ }
+ localStorage.setItem("anubis_capture_queue",JSON.stringify(remaining));
+ if(remaining.length===0){msg("captureMsg","Todas las capturas pendientes fueron sincronizadas.");await loadPlayerGame();}
+ else msg("captureMsg",remaining.length+" captura(s) siguen pendientes de validación. Revisa conexión y vuelve a intentar.");
 }
 (async()=>{const {data:{session}}=await db.auth.getSession();if(session?.user){try{await enterApp(session.user);}catch(e){await logout();msg("loginMsg",e.message);}}})();
+window.addEventListener("online",async()=>{await syncPendingCaptures();const loc=JSON.parse(localStorage.getItem("anubis_location_queue")||"null");if(loc&&currentUser){const {error}=await db.from("player_locations").upsert(loc,{onConflict:"game_id,user_id"});if(!error){localStorage.removeItem("anubis_location_queue");msg("playerStatus","Ubicación compartida al recuperar internet.");}}});
 if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));}
 </script>
 </body></html>
