@@ -221,20 +221,16 @@ async function createGame() {
 
     if (gameError) throw gameError;
 
-    const colors = [
-  'red',
-  'blue',
-  'green'
-];
+const colors = ['red', 'blue', 'green'];
 
-    const teams = Array.from(
-      { length: teamCount },
-      (_, i) => ({
-        game_id: game.id,
-        name: 'Equipo ' + (i + 1),
-        color: colors[i]
-      })
-    );
+const teams = Array.from(
+  { length: teamCount },
+  (_, i) => ({
+    game_id: game.id,
+    name: 'Equipo ' + (i + 1),
+    color: colors[i]
+  })
+);
 
     const { error: teamsError } =
       await supabaseClient
