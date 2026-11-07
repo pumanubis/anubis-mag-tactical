@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -8,70 +7,36 @@
 <title>ANUBIS MAG TACTICAL</title>
 <style>
 *{box-sizing:border-box}
-body{
- margin:0;background:#111610;color:#eee;
- font-family:Arial,sans-serif;
-}
-header{
- background:#1d281c;border-bottom:2px solid #b59a45;
- padding:22px;text-align:center;
-}
+body{margin:0;background:#111610;color:#eee;font-family:Arial,sans-serif}
+header{background:#1d281c;border-bottom:2px solid #b59a45;padding:22px;text-align:center}
 header h1{color:#d5bd68;letter-spacing:3px}
 header p{color:#b5c2a9;font-size:12px}
 main{max-width:550px;margin:25px auto;padding:15px}
-.panel{
- background:#20291e;border:1px solid #59634b;
- border-radius:12px;padding:22px;margin-bottom:18px;
-}
+.panel{background:#20291e;border:1px solid #59634b;border-radius:12px;padding:22px;margin-bottom:18px}
 h2{color:#d5bd68;font-size:18px}
-input,select{
- width:100%;padding:14px;margin:9px 0;
- border-radius:7px;border:1px solid #66725a;
- background:#111610;color:white;font-size:16px;
-}
-button{
- width:100%;padding:15px;margin-top:10px;
- background:#687b42;color:white;border:0;
- border-radius:7px;font-weight:bold;font-size:15px;
- cursor:pointer;
-}
+input,select{width:100%;padding:14px;margin:9px 0;border-radius:7px;border:1px solid #66725a;background:#111610;color:white;font-size:16px}
+button{width:100%;padding:15px;margin-top:10px;background:#687b42;color:white;border:0;border-radius:7px;font-weight:bold;font-size:15px;cursor:pointer}
 button.secondary{background:#394735}
+button:disabled{opacity:.6;cursor:wait}
 .small{text-align:center;color:#9ba58e;font-size:12px}
 #dashboard{display:none}
 .gold{color:#d5bd68}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script></head>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
 <body>
-
 <header>
-<img src="anubis-mag-logo-oliva.png.png"
-alt="ANUBIS MAG MILSIM"
-style="width:150px;max-width:45%;height:auto;display:block;margin:0 auto 15px;"><h1>ANUBIS MAG</h1>
+<img src="anubis-mag-logo-oliva.png.png" alt="ANUBIS MAG MILSIM" style="width:150px;max-width:45%;height:auto;display:block;margin:0 auto 15px">
+<h1>ANUBIS MAG</h1>
 <p>TACTICAL SYSTEM · AIRSOFT MILSIM</p>
 </header>
-
 <main>
 <section id="login" class="panel">
 <h2>ACCESO TÁCTICO</h2>
 <p>Ingresa tu usuario y PIN de acceso.</p>
-
-<input
-  id="username"
-  type="text"
-  autocomplete="username"
-  placeholder="Usuario"
-  maxlength="50"
->
-
-<input
-  id="pin"
-  type="password"
-  inputmode="numeric"
-  maxlength="4"
-  placeholder="PIN de 4 dígitos"
->
-
-<button onclick="login()">INGRESAR</button>
+<input id="username" type="text" autocomplete="username" placeholder="Usuario" maxlength="50">
+<input id="pin" type="password" inputmode="numeric" maxlength="4" placeholder="PIN de 4 dígitos">
+<button id="loginButton" onclick="login()">INGRESAR</button>
 <p class="small">Acceso seguro ANUBIS MAG</p>
 </section>
 
@@ -81,44 +46,36 @@ style="width:150px;max-width:45%;height:auto;display:block;margin:0 auto 15px;">
 <p class="gold">ANUBIS MAG TACTICAL</p>
 <p>Panel principal de operaciones.</p>
 </div>
-
 <div class="panel">
 <h2>PARTIDAS</h2>
-<input id="gameName" placeholder="Nombre de la partida">
-<select id="teamCount">
-  <option value="2">2 equipos</option>
-  <option value="3">3 equipos</option>
-  <option value="4">4 equipos</option>
+<input id="gameName" placeholder="Nombre de la partida" maxlength="80">
+<select id="teamCount" aria-label="Cantidad de equipos">
+<option value="2">2 equipos</option>
+<option value="3">3 equipos</option>
+<option value="4">4 equipos</option>
 </select>
-<button onclick="createGame()">CREAR PARTIDA</button>
-<p id="gameStatus" class="small"></p>
+<button id="createGameButton" onclick="createGame()">CREAR PARTIDA</button>
+<p id="gameStatus" class="small" role="status" aria-live="polite"></p>
 </div>
-
 <div class="panel">
 <h2>FUNCIONES TÁCTICAS</h2>
-<button class="secondary">UBICACIÓN GPS</button>
-<button class="secondary">MIS EQUIPOS</button>
-<button class="secondary">CAPTURAR OBJETIVO QR</button>
-<button class="secondary">MAPA DE OPERACIONES</button>
-<p class="small">Funciones pendientes de conexión con Supabase.</p>
+<button class="secondary" disabled>UBICACIÓN GPS · EN DESARROLLO</button>
+<button class="secondary" disabled>MIS EQUIPOS · EN DESARROLLO</button>
+<button class="secondary" disabled>CAPTURAR OBJETIVO QR · EN DESARROLLO</button>
+<button class="secondary" disabled>MAPA DE OPERACIONES · EN DESARROLLO</button>
+<p class="small">Estas funciones se habilitarán por etapas.</p>
 </div>
-
 <button onclick="logout()">CERRAR SESIÓN</button>
 </section>
 </main>
-
 <script>
- const SUPABASE_URL = 'https://qpdbswjjlpgczpubefst.supabase.co';
-
+const SUPABASE_URL = 'https://qpdbswjjlpgczpubefst.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_k-y-PRQyuSWGXiuyHqP5aw_RQlZySZ4';
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const supabaseClient = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_KEY
-);async function login() {
-  const username = document
-    .getElementById('username').value.trim().toLowerCase();
-
+async function login() {
+  const button = document.getElementById('loginButton');
+  const username = document.getElementById('username').value.trim().toLowerCase();
   const pin = document.getElementById('pin').value;
 
   if (!username || !/^[0-9]{4}$/.test(pin)) {
@@ -126,47 +83,35 @@ const supabaseClient = window.supabase.createClient(
     return;
   }
 
+  button.disabled = true;
+  button.textContent = 'VALIDANDO...';
   try {
-    const { data, error } =
-      await supabaseClient.functions.invoke('tactical-auth', {
-        body: {
-          username: username,
-          pin: pin
-        }
-      });
-
-    if (error) {
-      throw error;
-    }
-
+    const { data, error } = await supabaseClient.functions.invoke('tactical-auth', {
+      body: { username, pin }
+    });
+    if (error) throw error;
     if (!data || !data.success || !data.token_hash) {
       throw new Error(data?.error || 'No se pudo autenticar.');
     }
 
-    const { data: authData, error: authError } =
-      await supabaseClient.auth.verifyOtp({
-        token_hash: data.token_hash,
-        type: data.type || 'magiclink'
-      });
-
+    const { data: authData, error: authError } = await supabaseClient.auth.verifyOtp({
+      token_hash: data.token_hash,
+      type: data.type || 'magiclink'
+    });
     if (authError || !authData.user) {
-      throw new Error(
-        authError?.message || 'No se pudo iniciar la sesión.'
-      );
+      throw new Error(authError?.message || 'No se pudo iniciar la sesión.');
     }
 
-    const { data: profile, error: profileError } =
-      await supabaseClient
-        .from('profiles')
-        .select('nickname, role')
-        .eq('id', authData.user.id)
-        .single();
+    const { data: profile, error: profileError } = await supabaseClient
+      .from('profiles')
+      .select('nickname, role')
+      .eq('id', authData.user.id)
+      .single();
 
     if (profileError || !profile) {
       await supabaseClient.auth.signOut();
       throw new Error('No se pudo verificar el perfil.');
     }
-
     if (profile.role !== 'admin') {
       await supabaseClient.auth.signOut();
       throw new Error('Este acceso está reservado al administrador.');
@@ -174,85 +119,74 @@ const supabaseClient = window.supabase.createClient(
 
     document.getElementById('login').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
-
     alert('Bienvenido, administrador ' + profile.nickname);
-
   } catch (error) {
     console.error('Error de acceso:', error);
     alert(error.message || 'Error de conexión con Supabase.');
+  } finally {
+    button.disabled = false;
+    button.textContent = 'INGRESAR';
   }
 }
- 
+
 async function createGame() {
   const name = document.getElementById('gameName').value.trim();
-  const teamCount = Number(
-    document.getElementById('teamCount').value
-  );
-
+  const teamCount = Number(document.getElementById('teamCount').value);
   const status = document.getElementById('gameStatus');
+  const button = document.getElementById('createGameButton');
 
   if (!name) {
     alert('Escribe el nombre de la partida.');
     return;
   }
+  if (![2, 3, 4].includes(teamCount)) {
+    alert('Selecciona 2, 3 o 4 equipos.');
+    return;
+  }
 
+  button.disabled = true;
   try {
     status.textContent = 'Creando partida...';
-
-    const { data: sessionData } =
-      await supabaseClient.auth.getSession();
-
+    const { data: sessionData } = await supabaseClient.auth.getSession();
     const user = sessionData.session?.user;
+    if (!user) throw new Error('Debes iniciar sesión nuevamente.');
 
-    if (!user) {
-      throw new Error('Debes iniciar sesión nuevamente.');
-    }
-
-    const { data: game, error: gameError } =
-      await supabaseClient
-        .from('games')
-        .insert({
-          name: name,
-          team_count: teamCount,
-          created_by: user.id
-        })
-        .select()
-        .single();
-
+    const { data: game, error: gameError } = await supabaseClient
+      .from('games')
+      .insert({ name, team_count: teamCount, created_by: user.id })
+      .select()
+      .single();
     if (gameError) throw gameError;
 
-const colors = ['red', 'blue', 'green'];
+    const colors = ['red', 'blue', 'green', 'yellow'];
+    const teams = Array.from({ length: teamCount }, (_, i) => ({
+      game_id: game.id,
+      name: 'Equipo ' + (i + 1),
+      color: colors[i]
+    }));
 
-const teams = Array.from(
-  { length: teamCount },
-  (_, i) => ({
-    game_id: game.id,
-    name: 'Equipo ' + (i + 1),
-    color: colors[i]
-  })
-);
+    const { error: teamsError } = await supabaseClient.from('teams').insert(teams);
+    if (teamsError) {
+      // Avoid leaving an empty game if team creation fails.
+      await supabaseClient.from('games').delete().eq('id', game.id);
+      throw teamsError;
+    }
 
-    const { error: teamsError } =
-      await supabaseClient
-        .from('teams')
-        .insert(teams);
-
-    if (teamsError) throw teamsError;
-
-    status.textContent =
-      '¡Partida creada correctamente! ID: ' + game.id;
-
+    status.textContent = '¡Partida creada correctamente! ID: ' + game.id;
     alert('Partida y equipos creados en Supabase.');
-
   } catch (error) {
     console.error(error);
     status.textContent = 'Error: ' + error.message;
     alert(error.message);
+  } finally {
+    button.disabled = false;
   }
 }
-function logout(){
- document.getElementById('dashboard').style.display='none';
- document.getElementById('login').style.display='block';
+
+async function logout() {
+  await supabaseClient.auth.signOut();
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('login').style.display = 'block';
 }
 </script>
 </body>
