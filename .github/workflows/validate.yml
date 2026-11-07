@@ -20,7 +20,7 @@ jobs:
           const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/gi)];
           if (!scripts.length) throw new Error('No inline application script found');
           scripts.forEach((match, i) => {
-            const file = \`/tmp/anubis-inline-\${i}.js\`;
+            const file = '/tmp/anubis-inline-' + i + '.js';
             fs.writeFileSync(file, match[1]);
             require('node:child_process').execFileSync(process.execPath, ['--check', file], {stdio:'inherit'});
           });
