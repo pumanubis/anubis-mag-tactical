@@ -1,259 +1,226 @@
-
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#151b14">
-<title>ANUBIS MAG TACTICAL</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#151b14"><meta name="description" content="Sistema táctico GPS, realidad aumentada y captura de objetivos para ANUBIS MAG MILSIM">
+<link rel="manifest" href="manifest.webmanifest"><title>ANUBIS MAG TACTICAL</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-*{box-sizing:border-box}
-body{
- margin:0;background:#111610;color:#eee;
- font-family:Arial,sans-serif;
-}
-header{
- background:#1d281c;border-bottom:2px solid #b59a45;
- padding:22px;text-align:center;
-}
-header h1{color:#d5bd68;letter-spacing:3px}
-header p{color:#b5c2a9;font-size:12px}
-main{max-width:550px;margin:25px auto;padding:15px}
-.panel{
- background:#20291e;border:1px solid #59634b;
- border-radius:12px;padding:22px;margin-bottom:18px;
-}
-h2{color:#d5bd68;font-size:18px}
-input,select{
- width:100%;padding:14px;margin:9px 0;
- border-radius:7px;border:1px solid #66725a;
- background:#111610;color:white;font-size:16px;
-}
-button{
- width:100%;padding:15px;margin-top:10px;
- background:#687b42;color:white;border:0;
- border-radius:7px;font-weight:bold;font-size:15px;
- cursor:pointer;
-}
-button.secondary{background:#394735}
-.small{text-align:center;color:#9ba58e;font-size:12px}
-#dashboard{display:none}
-.gold{color:#d5bd68}
+:root{--bg:#10160f;--panel:#1d281c;--panel2:#263323;--gold:#d5bd68;--olive:#71864a;--muted:#aab59f;--line:#4b5a42;--red:#c45a4d}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#263323 0,#10160f 58%);color:#f4f3eb;font-family:system-ui,Arial,sans-serif;min-height:100vh}
+header{padding:18px 14px 14px;text-align:center;border-bottom:1px solid #8d783d;background:#172016;position:sticky;top:0;z-index:20}
+header img{width:94px;height:auto;max-height:100px;object-fit:contain;display:block;margin:0 auto 6px}h1{margin:3px 0;color:var(--gold);font-size:22px;letter-spacing:3px}header p{margin:2px;color:var(--muted);font-size:10px;letter-spacing:2px}
+main{width:min(980px,100%);padding:16px;margin:auto}.panel{background:linear-gradient(145deg,#202b1f,#192218);border:1px solid var(--line);border-radius:14px;padding:17px;margin:0 0 14px;box-shadow:0 8px 24px #0003}
+h2{font-size:16px;color:var(--gold);margin:0 0 12px;letter-spacing:1px}h3{font-size:14px;margin:12px 0 6px;color:#e6dfbd}
+p{line-height:1.45}.muted,.small{color:var(--muted);font-size:12px}.small{text-align:center}
+input,select,textarea{width:100%;padding:12px;margin:6px 0 10px;border:1px solid #58674d;border-radius:8px;background:#10170f;color:white;font-size:15px;min-width:0}
+textarea{min-height:70px;resize:vertical}label{font-size:12px;color:#c7cfbd;display:block;margin-top:6px}
+button,.btn{border:0;border-radius:8px;padding:12px 14px;background:var(--olive);color:white;font-weight:750;cursor:pointer;font-size:13px;margin:4px 3px 4px 0}
+button.secondary{background:#394735;border:1px solid #66765b}button.danger{background:#743c34}button:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1;min-width:140px}.topline{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.hidden{display:none!important}.gold{color:var(--gold)}.status{padding:9px 11px;border-radius:8px;background:#111a10;color:#c9d4be;font-size:12px;margin-top:8px;overflow-wrap:anywhere}
+.card{border:1px solid #43513b;border-radius:10px;padding:12px;margin:9px 0;background:#192319}.tag{font-size:10px;padding:4px 8px;border-radius:20px;background:#394735;color:#e7dfb9}.tag.red{background:#713d35}.tag.blue{background:#294e72}.tag.green{background:#3e623d}.tag.yellow{background:#75652d}
+#map{height:330px;border-radius:10px;border:1px solid var(--line);z-index:1}.actions{display:flex;gap:6px;flex-wrap:wrap}.actions button{flex:1;min-width:120px}
+#qrBox{background:white;border-radius:10px;padding:12px;display:inline-block;margin:10px 0}#qrBox img{display:block}
+#reader{width:100%;max-width:480px;margin:10px auto;border-radius:10px;overflow:hidden}
+hr{border:0;border-top:1px solid var(--line);margin:14px 0}
+footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
+@media(min-width:700px){.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}.cols .panel{margin:0 0 14px}}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script></head>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
 <body>
-
-<header>
-<img src="anubis-mag-logo-oliva.png.png"
-alt="ANUBIS MAG MILSIM"
-style="width:150px;max-width:45%;height:auto;display:block;margin:0 auto 15px;"><h1>ANUBIS MAG</h1>
-<p>TACTICAL SYSTEM · AIRSOFT MILSIM</p>
-</header>
-
+<header><img src="anubis-mag-logo-oliva.png.png" alt="ANUBIS MAG MILSIM"><h1>ANUBIS MAG</h1><p>TACTICAL SYSTEM · AIRSOFT MILSIM</p></header>
 <main>
-<section id="login" class="panel">
-<h2>ACCESO TÁCTICO</h2>
-<p>Ingresa tu usuario y PIN de acceso.</p>
-
-<input
-  id="username"
-  type="text"
-  autocomplete="username"
-  placeholder="Usuario"
-  maxlength="50"
->
-
-<input
-  id="pin"
-  type="password"
-  inputmode="numeric"
-  maxlength="4"
-  placeholder="PIN de 4 dígitos"
->
-
-<button onclick="login()">INGRESAR</button>
-<p class="small">Acceso seguro ANUBIS MAG</p>
+<section id="login" class="panel" style="max-width:440px;margin:22px auto">
+<h2>ACCESO TÁCTICO</h2><p class="muted">Ingresa con tu usuario y PIN de cuatro dígitos.</p>
+<label>Usuario</label><input id="username" autocomplete="username" maxlength="32" placeholder="Usuario">
+<label>PIN</label><input id="pin" type="password" inputmode="numeric" maxlength="4" placeholder="••••">
+<button id="loginBtn" style="width:100%" onclick="login()">INGRESAR</button><p id="loginMsg" class="status hidden"></p>
+<p class="small">Acceso personal · ANUBIS MAG MILSIM</p>
 </section>
 
-<section id="dashboard">
-<div class="panel">
-<h2>BIENVENIDO AL SISTEMA</h2>
-<p class="gold">ANUBIS MAG TACTICAL</p>
-<p>Panel principal de operaciones.</p>
-</div>
+<section id="app" class="hidden">
+<div class="panel topline"><div><span class="tag" id="roleTag">OPERADOR</span><h2 id="welcome" style="margin:7px 0 0">CENTRO DE OPERACIONES</h2></div><button class="secondary" onclick="logout()">CERRAR SESIÓN</button></div>
 
+<section id="adminView" class="hidden">
+<div class="cols">
 <div class="panel">
-<h2>PARTIDAS</h2>
-<input id="gameName" placeholder="Nombre de la partida">
-<select id="teamCount">
-  <option value="2">2 equipos</option>
-  <option value="3">3 equipos</option>
-  <option value="4">4 equipos</option>
-</select>
-<button onclick="createGame()">CREAR PARTIDA</button>
-<p id="gameStatus" class="small"></p>
+<h2>CREAR PARTIDA</h2>
+<label>Nombre de la operación</label><input id="gameName" maxlength="80" placeholder="Ej. Operación Anubis">
+<label>Equipos</label><select id="teamCount"><option value="2">2 equipos</option><option value="3">3 equipos</option><option value="4">4 equipos</option></select>
+<button onclick="createGame()">CREAR PARTIDA</button><p id="createMsg" class="status hidden"></p>
 </div>
-
 <div class="panel">
-<h2>FUNCIONES TÁCTICAS</h2>
-<button class="secondary">UBICACIÓN GPS</button>
-<button class="secondary">MIS EQUIPOS</button>
-<button class="secondary">CAPTURAR OBJETIVO QR</button>
-<button class="secondary">MAPA DE OPERACIONES</button>
-<p class="small">Funciones pendientes de conexión con Supabase.</p>
+<h2>PARTIDAS REGISTRADAS</h2><div id="gamesList" class="muted">Cargando...</div>
 </div>
+</div>
+<div id="gameAdmin" class="hidden">
+<div class="panel">
+<div class="topline"><div><span class="tag" id="gameState">EN ESPERA</span><h2 id="selectedGameName" style="margin:8px 0">Operación</h2><div class="small" id="selectedGameId"></div></div><div class="actions"><button onclick="setGameStatus('active')">INICIAR</button><button class="danger" onclick="setGameStatus('finished')">FINALIZAR</button></div></div>
+</div>
+<div class="cols">
+<div class="panel">
+<h2>OBJETIVOS DE LA OPERACIÓN</h2>
+<label>Nombre del objetivo</label><input id="objectiveName" maxlength="80" placeholder="Ej. Depósito de suministros">
+<label>Descripción del objeto físico / elemento AR</label><textarea id="objectiveDescription" placeholder="Describe el objeto 3D realista que aparecerá en el terreno..."></textarea>
+<div class="row"><div><label>Latitud</label><input id="objLat" type="number" step="any" placeholder="Latitud GPS"></div><div><label>Longitud</label><input id="objLng" type="number" step="any" placeholder="Longitud GPS"></div></div>
+<label>Radio de activación (metros)</label><input id="objRadius" type="number" min="5" max="500" value="35">
+<label>Modelo 3D (.glb / .gltf) URL (opcional)</label><input id="objModel" type="url" placeholder="https://.../objeto.glb">
+<div class="actions"><button class="secondary" onclick="useCurrentPosition('objLat','objLng')">USAR MI GPS</button><button onclick="createObjective()">GUARDAR OBJETIVO + QR</button></div>
+<p id="objectiveMsg" class="status hidden"></p><div id="qrResult" class="hidden card"><b class="gold" id="qrTitle"></b><div id="qrBox"></div><p class="small">Imprime este QR y ubícalo en el objetivo. El código se muestra una sola vez.</p><button onclick="window.print()">IMPRIMIR QR</button></div>
+</div>
+<div class="panel">
+<h2>JUGADORES Y EQUIPOS</h2>
+<label>Indicativo / nombre</label><input id="playerCallsign" maxlength="40" placeholder="Ej. Puma 01">
+<label>Usuario de acceso</label><input id="playerUsername" maxlength="32" placeholder="Ej. puma01">
+<label>PIN de cuatro dígitos</label><input id="playerPin" inputmode="numeric" maxlength="4" placeholder="••••">
+<label>Equipo</label><select id="playerTeam"></select>
+<button onclick="createPlayer()">REGISTRAR JUGADOR</button><p id="playerMsg" class="status hidden"></p>
+<hr><div id="playersList" class="muted">Selecciona una partida.</div>
+</div>
+</div>
+<div class="cols">
+<div class="panel"><h2>ASIGNAR OBJETIVOS</h2><label>Jugador</label><select id="assignPlayer"></select><label>Objetivos</label><div id="assignObjectives" class="muted"></div><label><input id="assignSecret" type="checkbox" style="width:auto"> Marcar como misión secreta</label><button onclick="assignObjectives()">ASIGNAR MISIONES</button><p id="assignMsg" class="status hidden"></p></div>
+<div class="panel"><h2>MAPA DE OPERACIONES</h2><div id="adminMap"></div><p class="small">Los marcadores representan objetivos con coordenadas GPS.</p></div>
+</div>
+<div class="panel"><h2>OBJETIVOS CREADOS</h2><div id="objectivesList"></div></div>
+</div>
+</section>
 
-<button onclick="logout()">CERRAR SESIÓN</button>
+<section id="playerView" class="hidden">
+<div class="panel"><h2>MI OPERACIÓN</h2><div id="playerGameInfo" class="muted">Cargando partida...</div><div id="playerStatus" class="status"></div></div>
+<div class="cols">
+<div class="panel"><h2>MIS OBJETIVOS / MISIONES</h2><div id="myObjectives"></div></div>
+<div class="panel"><h2>CAPTURAR OBJETIVO QR</h2><p class="muted">Escanea el código físico del objetivo. Una vez capturado, desaparece para todos los equipos.</p><button onclick="startScanner()">ACTIVAR CÁMARA Y ESCANEAR</button><button class="secondary" onclick="stopScanner()">DETENER CÁMARA</button><div id="reader"></div><p id="captureMsg" class="status hidden"></p></div>
+</div>
+<div class="panel"><h2>MAPA TÁCTICO GPS</h2><div id="playerMap"></div><div class="actions"><button onclick="shareLocation()">COMPARTIR MI UBICACIÓN</button><button class="secondary" onclick="loadPlayerMap()">ACTUALIZAR MAPA</button></div><p class="small">Tu ubicación solo se comparte con integrantes de tu mismo equipo y administradores.</p></div>
+<div class="panel"><h2>REALIDAD AUMENTADA</h2><div id="arArea" class="muted">Selecciona una misión que tenga un modelo 3D configurado.</div></div>
+</section>
 </section>
 </main>
+<footer>ANUBIS MAG TACTICAL · Sistema de operaciones MILSIM</footer>
 
 <script>
- const SUPABASE_URL = 'https://qpdbswjjlpgczpubefst.supabase.co';
-
-const SUPABASE_KEY = 'sb_publishable_k-y-PRQyuSWGXiuyHqP5aw_RQlZySZ4';
-
-const supabaseClient = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_KEY
-);async function login() {
-  const username = document
-    .getElementById('username').value.trim().toLowerCase();
-
-  const pin = document.getElementById('pin').value;
-
-  if (!username || !/^[0-9]{4}$/.test(pin)) {
-    alert('Ingresa tu usuario y PIN de 4 dígitos.');
-    return;
-  }
-
-  try {
-    const { data, error } =
-      await supabaseClient.functions.invoke('tactical-auth', {
-        body: {
-          username: username,
-          pin: pin
-        }
-      });
-
-    if (error) {
-      throw error;
-    }
-
-    if (!data || !data.success || !data.token_hash) {
-      throw new Error(data?.error || 'No se pudo autenticar.');
-    }
-
-    const { data: authData, error: authError } =
-      await supabaseClient.auth.verifyOtp({
-        token_hash: data.token_hash,
-        type: data.type || 'magiclink'
-      });
-
-    if (authError || !authData.user) {
-      throw new Error(
-        authError?.message || 'No se pudo iniciar la sesión.'
-      );
-    }
-
-    const { data: profile, error: profileError } =
-      await supabaseClient
-        .from('profiles')
-        .select('nickname, role')
-        .eq('id', authData.user.id)
-        .single();
-
-    if (profileError || !profile) {
-      await supabaseClient.auth.signOut();
-      throw new Error('No se pudo verificar el perfil.');
-    }
-
-    if (profile.role !== 'admin') {
-      await supabaseClient.auth.signOut();
-      throw new Error('Este acceso está reservado al administrador.');
-    }
-
-    document.getElementById('login').style.display = 'none';
-    document.getElementById('dashboard').style.display = 'block';
-
-    alert('Bienvenido, administrador ' + profile.nickname);
-
-  } catch (error) {
-    console.error('Error de acceso:', error);
-    alert(error.message || 'Error de conexión con Supabase.');
-  }
+const SUPABASE_URL="https://qpdbswjjlpgczpubefst.supabase.co";
+const SUPABASE_KEY="sb_publishable_k-y-PRQyuSWGXiuyHqP5aw_RQlZySZ4";
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let currentUser=null,currentProfile=null,currentGame=null,currentTeams=[],currentPlayers=[],currentObjectives=[],mapAdmin=null,mapPlayer=null,scanner=null;
+const colors={red:"Rojo",blue:"Azul",green:"Verde",yellow:"Amarillo"};
+const $=id=>document.getElementById(id);
+const msg=(id,text)=>{$(id).textContent=text;$(id).classList.remove("hidden")};
+const escapeHtml=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function login(){
+ const username=$("username").value.trim().toLowerCase(),pin=$("pin").value;
+ if(!username||!/^\d{4}$/.test(pin)){msg("loginMsg","Escribe el usuario y el PIN de cuatro dígitos.");return;}
+ $("loginBtn").disabled=true;msg("loginMsg","Verificando credenciales...");
+ try{
+  const {data,error}=await db.functions.invoke("tactical-auth",{body:{username,pin}});
+  if(error)throw error;if(!data?.success||!data.token_hash)throw new Error(data?.error||"No se pudo autenticar.");
+  const {data:auth,error:authErr}=await db.auth.verifyOtp({token_hash:data.token_hash,type:data.type||"magiclink"});
+  if(authErr||!auth.user)throw new Error(authErr?.message||"No se pudo iniciar sesión.");
+  await enterApp(auth.user);
+ }catch(e){msg("loginMsg",e.message||"Error de acceso.");}finally{$("loginBtn").disabled=false;}
 }
- 
-async function createGame() {
-  const name = document.getElementById('gameName').value.trim();
-  const teamCount = Number(
-    document.getElementById('teamCount').value
-  );
-
-  const status = document.getElementById('gameStatus');
-
-  if (!name) {
-    alert('Escribe el nombre de la partida.');
-    return;
-  }
-
-  try {
-    status.textContent = 'Creando partida...';
-
-    const { data: sessionData } =
-      await supabaseClient.auth.getSession();
-
-    const user = sessionData.session?.user;
-
-    if (!user) {
-      throw new Error('Debes iniciar sesión nuevamente.');
-    }
-
-    const { data: game, error: gameError } =
-      await supabaseClient
-        .from('games')
-        .insert({
-          name: name,
-          team_count: teamCount,
-          created_by: user.id
-        })
-        .select()
-        .single();
-
-    if (gameError) throw gameError;
-
-const colors = ['red', 'blue', 'green'];
-
-const teams = Array.from(
-  { length: teamCount },
-  (_, i) => ({
-    game_id: game.id,
-    name: 'Equipo ' + (i + 1),
-    color: colors[i]
-  })
-);
-
-    const { error: teamsError } =
-      await supabaseClient
-        .from('teams')
-        .insert(teams);
-
-    if (teamsError) throw teamsError;
-
-    status.textContent =
-      '¡Partida creada correctamente! ID: ' + game.id;
-
-    alert('Partida y equipos creados en Supabase.');
-
-  } catch (error) {
-    console.error(error);
-    status.textContent = 'Error: ' + error.message;
-    alert(error.message);
-  }
+async function enterApp(user){
+ currentUser=user;const {data:profile,error}=await db.from("profiles").select("nickname,role").eq("id",user.id).single();
+ if(error||!profile)throw new Error("No se pudo cargar el perfil.");
+ currentProfile=profile;$("login").classList.add("hidden");$("app").classList.remove("hidden");$("welcome").textContent="BIENVENIDO, "+profile.nickname.toUpperCase();$("roleTag").textContent=profile.role==="admin"?"ADMINISTRADOR":"OPERADOR";
+ if(profile.role==="admin"){$("adminView").classList.remove("hidden");$("playerView").classList.add("hidden");await loadGames();}
+ else{$("playerView").classList.remove("hidden");$("adminView").classList.add("hidden");await loadPlayerGame();}
 }
-function logout(){
- document.getElementById('dashboard').style.display='none';
- document.getElementById('login').style.display='block';
+async function logout(){await stopScanner();await db.auth.signOut();currentUser=null;currentProfile=null;currentGame=null;$("app").classList.add("hidden");$("login").classList.remove("hidden");$("pin").value="";}
+async function createGame(){
+ const name=$("gameName").value.trim(),count=Number($("teamCount").value);if(name.length<3){msg("createMsg","El nombre debe tener al menos 3 caracteres.");return;}
+ try{const {data,error}=await db.rpc("create_game_with_teams",{p_name:name,p_team_count:count});if(error)throw error;$("gameName").value="";msg("createMsg","Partida creada con "+count+" equipos.");await loadGames();await selectGame(data);}
+ catch(e){msg("createMsg",e.message);}
 }
+async function loadGames(){
+ const {data,error}=await db.from("games").select("*").order("created_at",{ascending:false});if(error){$("gamesList").textContent=error.message;return;}
+ $("gamesList").innerHTML=data.length?data.map(g=>'<div class="card"><div class="topline"><b>'+escapeHtml(g.name)+'</b><span class="tag">'+escapeHtml(g.status)+'</span></div><p class="small">'+g.team_count+' equipos</p><button class="secondary" onclick="selectGame(\''+g.id+'\')">ABRIR OPERACIÓN</button></div>').join(""):"Aún no hay partidas creadas.";
+}
+async function selectGame(id){
+ const {data:game,error}=await db.from("games").select("*").eq("id",id).single();if(error){alert(error.message);return;}currentGame=game;
+ const [t,p,o]=await Promise.all([db.from("teams").select("*").eq("game_id",id).order("created_at"),db.from("game_players").select("*").eq("game_id",id).order("joined_at"),db.from("objectives").select("*").eq("game_id",id).order("created_at")]);
+ if(t.error||p.error||o.error){alert((t.error||p.error||o.error).message);return;}
+ currentTeams=t.data;currentPlayers=p.data;currentObjectives=o.data;$("gameAdmin").classList.remove("hidden");$("selectedGameName").textContent=game.name;$("selectedGameId").textContent="ID: "+game.id;$("gameState").textContent=game.status.toUpperCase();
+ $("playerTeam").innerHTML=currentTeams.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join("");
+ $("assignPlayer").innerHTML=currentPlayers.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.callsign)+'</option>').join("");
+ $("playersList").innerHTML=currentPlayers.length?currentPlayers.map(p=>'<div class="card"><b>'+escapeHtml(p.callsign)+'</b><div class="small">'+(currentTeams.find(t=>t.id===p.team_id)?.name||"Equipo")+' · '+p.status+'</div></div>').join(""):"No hay jugadores registrados.";
+ $("objectivesList").innerHTML=currentObjectives.length?currentObjectives.map(o=>'<div class="card"><div class="topline"><b>'+escapeHtml(o.name)+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+o.status+'</span></div><div class="small">'+(o.latitude!=null?Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+' · radio '+o.radius_m+' m</div></div>').join(""):"No hay objetivos registrados.";
+ $("assignObjectives").innerHTML=currentObjectives.map(o=>'<label><input type="checkbox" value="'+o.id+'" style="width:auto"> '+escapeHtml(o.name)+'</label>').join("")||"Primero crea objetivos.";
+ renderAdminMap();
+}
+async function setGameStatus(status){
+ if(!currentGame)return;const {error}=await db.from("games").update({status}).eq("id",currentGame.id);if(error){alert(error.message);return;}currentGame.status=status;$("gameState").textContent=status.toUpperCase();await loadGames();alert(status==="active"?"Operación iniciada.":"Operación finalizada.");
+}
+async function createObjective(){
+ if(!currentGame)return;const name=$("objectiveName").value.trim();if(name.length<2){msg("objectiveMsg","Escribe un nombre para el objetivo.");return;}
+ const lat=$("objLat").value.trim(),lng=$("objLng").value.trim(),radius=Math.max(5,Math.min(500,Number($("objRadius").value)||35));
+ if((lat&&!lng)||(!lat&&lng)){msg("objectiveMsg","Debes ingresar latitud y longitud juntas.");return;}
+ const raw=Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b=>b.toString(16).padStart(2,"0")).join("");
+ const hash=await sha256(raw);
+ const payload={game_id:currentGame.id,name,token_hash:hash,radius_m:radius,visual_description:$("objectiveDescription").value.trim()||null,ar_asset_url:$("objModel").value.trim()||null};
+ if(lat&&lng){payload.latitude=Number(lat);payload.longitude=Number(lng);}
+ const {data,error}=await db.from("objectives").insert(payload).select().single();if(error){msg("objectiveMsg",error.message);return;}
+ $("qrTitle").textContent=name;$("qrBox").innerHTML="";new QRCode($("qrBox"),{text:raw,width:190,height:190,correctLevel:QRCode.CorrectLevel.H});$("qrResult").classList.remove("hidden");msg("objectiveMsg","Objetivo guardado. Conserva e imprime este QR: no se puede volver a generar el mismo código.");
+ $("objectiveName").value="";$("objectiveDescription").value="";$("objModel").value="";await selectGame(currentGame.id);
+}
+async function sha256(v){const h=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v));return Array.from(new Uint8Array(h)).map(x=>x.toString(16).padStart(2,"0")).join("");}
+async function useCurrentPosition(latId,lngId){if(!navigator.geolocation){alert("Este navegador no ofrece GPS.");return;}navigator.geolocation.getCurrentPosition(p=>{$(latId).value=p.coords.latitude.toFixed(7);$(lngId).value=p.coords.longitude.toFixed(7);},e=>alert("No se pudo obtener la ubicación: "+e.message),{enableHighAccuracy:true,timeout:15000});}
+async function createPlayer(){
+ if(!currentGame){msg("playerMsg","Selecciona una partida.");return;}
+ const {data:{session}}=await db.auth.getSession();const body={callsign:$("playerCallsign").value.trim(),username:$("playerUsername").value.trim(),pin:$("playerPin").value,team_id:$("playerTeam").value,game_id:currentGame.id};
+ const {data,error}=await db.functions.invoke("admin-create-player",{body});if(error){msg("playerMsg",error.message);return;}if(!data?.success){msg("playerMsg",data?.error||"No se pudo crear.");return;}
+ msg("playerMsg","Jugador registrado: "+data.username+". Entrégale su usuario y PIN.");$("playerCallsign").value="";$("playerUsername").value="";$("playerPin").value="";await selectGame(currentGame.id);
+}
+async function assignObjectives(){
+ const player=$("assignPlayer").value,ids=Array.from(document.querySelectorAll("#assignObjectives input:checked")).map(x=>x.value);if(!player||!ids.length){msg("assignMsg","Selecciona un jugador y al menos un objetivo.");return;}
+ const {data,error}=await db.rpc("assign_multiple_objectives",{p_game_id:currentGame.id,p_player_id:player,p_objective_ids:ids,p_is_secret:$("assignSecret").checked,p_notes:null});
+ if(error){msg("assignMsg",error.message);return;}msg("assignMsg",data.length+" misión(es) asignada(s).");document.querySelectorAll("#assignObjectives input").forEach(x=>x.checked=false);
+}
+function renderAdminMap(){
+ if(!window.L)return;const pts=currentObjectives.filter(o=>o.latitude!=null&&o.longitude!=null);if(!mapAdmin){mapAdmin=L.map("adminMap").setView(pts.length?[pts[0].latitude,pts[0].longitude]:[4.65,-74.1],pts.length?14:5);L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap"}).addTo(mapAdmin);}else{mapAdmin.eachLayer(l=>{if(l instanceof L.Marker||l instanceof L.Circle)L.removeLayer(l);});}
+ pts.forEach(o=>{L.marker([o.latitude,o.longitude]).addTo(mapAdmin).bindPopup(escapeHtml(o.name));L.circle([o.latitude,o.longitude],{radius:o.radius_m,color:"#d5bd68"}).addTo(mapAdmin);});setTimeout(()=>mapAdmin.invalidateSize(),200);
+}
+async function loadPlayerGame(){
+ const {data:gp,error}=await db.from("game_players").select("id,game_id,team_id,callsign,status").eq("user_id",currentUser.id).eq("status","active").order("joined_at",{ascending:false}).limit(1).maybeSingle();
+ if(error||!gp){$("playerGameInfo").textContent="No tienes una partida activa asignada. Contacta al administrador.";return;}
+ const [g,t,a]=await Promise.all([db.from("games").select("*").eq("id",gp.game_id).single(),db.from("teams").select("*").eq("id",gp.team_id).single(),db.from("objective_assignments").select("id,status,is_secret,sequence_order,unlocked_at,objectives(id,name,status,latitude,longitude,radius_m,visual_description,ar_asset_url)").eq("player_id",gp.id).order("sequence_order")]);
+ if(g.error||t.error){$("playerGameInfo").textContent="No se pudo cargar la operación.";return;}
+ currentGame=g.data;currentTeams=[t.data];currentPlayers=[gp];$("playerGameInfo").innerHTML="<b>"+escapeHtml(g.data.name)+"</b><br>Indicativo: "+escapeHtml(gp.callsign)+" · Equipo: "+escapeHtml(t.data.name)+" <span class='tag "+t.data.color+"'>"+(colors[t.data.color]||t.data.color)+"</span><br>Estado: "+g.data.status;
+ $("playerStatus").textContent=g.data.status==="active"?"Operación en curso. Mantén tu ubicación compartida para apoyar al equipo.":"La operación no está activa.";
+ const assignments=a.data||[];$("myObjectives").innerHTML=assignments.length?assignments.map(x=>{const o=x.objectives||{};return '<div class="card"><div class="topline"><b>'+escapeHtml(o.name||"Misión")+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+(o.status==="captured"?"CAPTURADO":x.status.toUpperCase())+'</span></div>'+(x.is_secret?'<span class="tag yellow">MISIÓN SECRETA</span>':"")+'<p class="small">'+(o.latitude!=null?"GPS: "+Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+'</p>'+(o.visual_description?'<p>'+escapeHtml(o.visual_description)+'</p>':"")+(o.ar_asset_url?'<button class="secondary" onclick="showAR(\''+encodeURIComponent(o.ar_asset_url)+'\',\''+escapeHtml(o.name)+'\')">VER OBJETO 3D / RA</button>':"")+'</div>';}).join(""):"No tienes misiones asignadas todavía.";
+ $("arArea").textContent="Los modelos 3D se abrirán aquí cuando una misión tenga un archivo GLB/GLTF configurado por el administrador.";
+ await loadPlayerMap();
+}
+function showAR(url,name){const src=decodeURIComponent(url);$("arArea").innerHTML='<h3>'+escapeHtml(name)+'</h3><model-viewer src="'+escapeHtml(src)+'" ar ar-modes="webxr scene-viewer quick-look" camera-controls auto-rotate shadow-intensity="1" style="width:100%;height:360px;background:#111a10;border-radius:10px" alt="Modelo 3D del objetivo"></model-viewer><p class="small">Si el equipo es compatible, pulsa el icono AR del visor para colocar el objeto en el entorno real.</p>';if(!document.querySelector('script[data-modelviewer]')){const s=document.createElement("script");s.type="module";s.src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js";s.dataset.modelviewer="1";document.head.appendChild(s);}}
+async function shareLocation(){
+ if(!currentGame||!navigator.geolocation){alert("GPS no disponible.");return;}
+ navigator.geolocation.getCurrentPosition(async p=>{const payload={game_id:currentGame.id,user_id:currentUser.id,latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy_m:p.coords.accuracy,updated_at:new Date().toISOString()};const {error}=await db.from("player_locations").upsert(payload,{onConflict:"game_id,user_id"});if(error){msg("playerStatus",error.message);return;}msg("playerStatus","Ubicación compartida con tu equipo. Precisión aproximada: "+Math.round(p.coords.accuracy)+" m.");await loadPlayerMap();},e=>msg("playerStatus","No se pudo obtener GPS: "+e.message),{enableHighAccuracy:true,timeout:15000,maximumAge:5000});
+}
+async function loadPlayerMap(){
+ if(!currentGame||!window.L)return;
+ const [o,l,p]=await Promise.all([db.from("objectives").select("name,latitude,longitude,status,radius_m").eq("game_id",currentGame.id).eq("status","available"),db.from("player_locations").select("user_id,latitude,longitude,updated_at").eq("game_id",currentGame.id),db.from("game_players").select("user_id,callsign").eq("game_id",currentGame.id).eq("team_id",currentTeams[0].id).eq("status","active")]);
+ const teamIds=new Set((p.data||[]).map(x=>x.user_id));const locs=(l.data||[]).filter(x=>teamIds.has(x.user_id));const pts=[...(o.data||[]).filter(x=>x.latitude!=null).map(x=>[x.latitude,x.longitude]),...locs.map(x=>[x.latitude,x.longitude])];
+ if(!mapPlayer){mapPlayer=L.map("playerMap").setView(pts.length?pts[0]:[4.65,-74.1],pts.length?14:5);L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap"}).addTo(mapPlayer);}else{mapPlayer.eachLayer(l=>{if(l instanceof L.Marker||l instanceof L.Circle)L.removeLayer(l);});}
+ (o.data||[]).filter(x=>x.latitude!=null).forEach(x=>L.marker([x.latitude,x.longitude]).addTo(mapPlayer).bindPopup("Objetivo: "+escapeHtml(x.name)));
+ const names=new Map((p.data||[]).map(x=>[x.user_id,x.callsign]));locs.forEach(x=>L.circleMarker([x.latitude,x.longitude],{radius:8,color:"#8bb8e8"}).addTo(mapPlayer).bindPopup("Compañero: "+escapeHtml(names.get(x.user_id)||"Operador")));
+ setTimeout(()=>mapPlayer.invalidateSize(),250);
+}
+async function startScanner(){
+ if(!currentGame||currentGame.status!=="active"){msg("captureMsg","La partida debe estar activa para capturar.");return;}
+ if(!window.Html5Qrcode){msg("captureMsg","No se pudo cargar el lector QR. Verifica tu conexión.");return;}
+ try{scanner=new Html5Qrcode("reader");await scanner.start({facingMode:"environment"},{fps:10,qrbox:{width:240,height:240}},async text=>{await stopScanner();await captureObjective(text);},()=>{});}catch(e){msg("captureMsg","No se pudo abrir la cámara. Revisa el permiso del navegador.");}
+}
+async function stopScanner(){if(scanner){try{if(scanner.isScanning)await scanner.stop();await scanner.clear();}catch{}scanner=null;}}
+async function captureObjective(raw){
+ const {data,error}=await db.functions.invoke("capture-objective",{body:{token:raw}});if(error){msg("captureMsg",error.message);return;}if(!data?.success){msg("captureMsg",data?.error||"No se pudo capturar.");return;}msg("captureMsg","¡OBJETIVO CAPTURADO! "+data.objective+" · Desaparece para todos los equipos.");await loadPlayerGame();
+}
+(async()=>{const {data:{session}}=await db.auth.getSession();if(session?.user){try{await enterApp(session.user);}catch(e){await logout();msg("loginMsg",e.message);}}})();
+if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));}
 </script>
-</body>
-</html>
+</body></html>
