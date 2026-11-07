@@ -1,0 +1,19 @@
+{
+  "name": "ANUBIS MAG TACTICAL",
+  "short_name": "ANUBIS TACTICAL",
+  "description": "Sistema táctico GPS y captura de objetivos ANUBIS MAG MILSIM",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#10160f",
+  "theme_color": "#172016",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "./anubis-mag-logo-oliva.png.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
