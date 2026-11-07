@@ -84,7 +84,7 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 </div>
 </div>
 <div class="cols">
-<div class="panel"><h2>ASIGNAR OBJETIVOS</h2><label>Jugador</label><select id="assignPlayer"></select><label>Objetivos</label><div id="assignObjectives" class="muted"></div><label><input id="assignSecret" type="checkbox" style="width:auto"> Marcar como misión secreta</label><button onclick="assignObjectives()">ASIGNAR MISIONES</button><p id="assignMsg" class="status hidden"></p></div>
+<div class="panel"><h2>ASIGNAR OBJETIVOS</h2><label>Jugador</label><select id="assignPlayer"></select><label>Objetivos</label><div id="assignObjectives" class="muted"></div><label><input id="assignSecret" type="checkbox" style="width:auto"> Marcar como misión secreta</label><button onclick="assignObjectives()">ASIGNAR MISIONES</button><p id="assignMsg" class="status hidden"></p><div id="assignedMissions"></div></div>
 <div class="panel"><h2>MAPA DE OPERACIONES</h2><div id="adminMap"></div><p class="small">Los marcadores representan objetivos con coordenadas GPS.</p></div>
 </div>
 <div class="panel"><h2>OBJETIVOS CREADOS</h2><div id="objectivesList"></div></div>
@@ -152,7 +152,7 @@ async function selectGame(id){
  $("playersList").innerHTML=currentPlayers.length?currentPlayers.map(p=>'<div class="card"><b>'+escapeHtml(p.callsign)+'</b><div class="small">'+(currentTeams.find(t=>t.id===p.team_id)?.name||"Equipo")+' · '+p.status+'</div></div>').join(""):"No hay jugadores registrados.";
  $("objectivesList").innerHTML=currentObjectives.length?currentObjectives.map(o=>'<div class="card"><div class="topline"><b>'+escapeHtml(o.name)+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+o.status+'</span></div><div class="small">'+(o.latitude!=null?Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+' · radio '+o.radius_m+' m</div></div>').join(""):"No hay objetivos registrados.";
  $("assignObjectives").innerHTML=currentObjectives.map(o=>'<label><input type="checkbox" value="'+o.id+'" style="width:auto"> '+escapeHtml(o.name)+'</label>').join("")||"Primero crea objetivos.";
- renderAdminMap();
+ await loadAssignedMissions();renderAdminMap();
 }
 async function setGameStatus(status){
  if(!currentGame)return;const {error}=await db.from("games").update({status}).eq("id",currentGame.id);if(error){alert(error.message);return;}currentGame.status=status;$("gameState").textContent=status.toUpperCase();await loadGames();alert(status==="active"?"Operación iniciada.":"Operación finalizada.");
@@ -182,6 +182,15 @@ async function assignObjectives(){
  const {data,error}=await db.rpc("assign_multiple_objectives",{p_game_id:currentGame.id,p_player_id:player,p_objective_ids:ids,p_is_secret:$("assignSecret").checked,p_notes:null});
  if(error){msg("assignMsg",error.message);return;}msg("assignMsg",data.length+" misión(es) asignada(s).");document.querySelectorAll("#assignObjectives input").forEach(x=>x.checked=false);
 }
+async function loadAssignedMissions(){
+ const {data,error}=await db.from("objective_assignments").select("id,player_id,objective_id,status,is_secret,unlocked_at").eq("game_id",currentGame.id).order("assigned_at",{ascending:false});
+ if(error){$("assignedMissions").textContent=error.message;return;}
+ $("assignedMissions").innerHTML=data.length?'<h3>Misiones asignadas / desbloqueo</h3>'+data.map(a=>{const p=currentPlayers.find(x=>x.id===a.player_id),o=currentObjectives.find(x=>x.id===a.objective_id);return '<div class="card"><b>'+escapeHtml(p?.callsign||"Jugador")+'</b> · '+escapeHtml(o?.name||"Objetivo")+'<div class="small">'+(a.is_secret?"SECRETA":"NORMAL")+' · '+(a.unlocked_at?"DESBLOQUEADA":"BLOQUEADA")+'</div>'+(a.unlocked_at?"":'<button class="secondary" onclick="unlockAssignment(\''+a.id+'\')">DESBLOQUEAR</button>')+'</div>';}).join(""):"<p class='small'>Aún no hay misiones asignadas.</p>";
+}
+async function unlockAssignment(id){
+ const {error}=await db.from("objective_assignments").update({unlocked_at:new Date().toISOString()}).eq("id",id);
+ if(error){alert(error.message);return;}await loadAssignedMissions();alert("Misión desbloqueada para el jugador.");
+}
 function renderAdminMap(){
  if(!window.L)return;const pts=currentObjectives.filter(o=>o.latitude!=null&&o.longitude!=null);if(!mapAdmin){mapAdmin=L.map("adminMap").setView(pts.length?[pts[0].latitude,pts[0].longitude]:[4.65,-74.1],pts.length?14:5);L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap"}).addTo(mapAdmin);}else{mapAdmin.eachLayer(l=>{if(l instanceof L.Marker||l instanceof L.Circle)L.removeLayer(l);});}
  pts.forEach(o=>{L.marker([o.latitude,o.longitude]).addTo(mapAdmin).bindPopup(escapeHtml(o.name));L.circle([o.latitude,o.longitude],{radius:o.radius_m,color:"#d5bd68"}).addTo(mapAdmin);});setTimeout(()=>mapAdmin.invalidateSize(),200);
@@ -189,7 +198,7 @@ function renderAdminMap(){
 async function loadPlayerGame(){
  const {data:gp,error}=await db.from("game_players").select("id,game_id,team_id,callsign,status").eq("user_id",currentUser.id).eq("status","active").order("joined_at",{ascending:false}).limit(1).maybeSingle();
  if(error||!gp){$("playerGameInfo").textContent="No tienes una partida activa asignada. Contacta al administrador.";return;}
- const [g,t,a]=await Promise.all([db.from("games").select("*").eq("id",gp.game_id).single(),db.from("teams").select("*").eq("id",gp.team_id).single(),db.from("objective_assignments").select("id,status,is_secret,sequence_order,unlocked_at,objectives(id,name,status,latitude,longitude,radius_m,visual_description,ar_asset_url)").eq("player_id",gp.id).order("sequence_order")]);
+ const [g,t,a]=await Promise.all([db.from("games").select("*").eq("id",gp.game_id).single(),db.from("teams").select("*").eq("id",gp.team_id).single(),db.from("objective_assignments").select("id,status,is_secret,sequence_order,unlocked_at,objectives(id,name,status,latitude,longitude,radius_m,visual_description,ar_asset_url)").eq("player_id",gp.id).not("unlocked_at","is",null).order("sequence_order")]);
  if(g.error||t.error){$("playerGameInfo").textContent="No se pudo cargar la operación.";return;}
  currentGame=g.data;currentTeams=[t.data];currentPlayers=[gp];$("playerGameInfo").innerHTML="<b>"+escapeHtml(g.data.name)+"</b><br>Indicativo: "+escapeHtml(gp.callsign)+" · Equipo: "+escapeHtml(t.data.name)+" <span class='tag "+t.data.color+"'>"+(colors[t.data.color]||t.data.color)+"</span><br>Estado: "+g.data.status;
  $("playerStatus").textContent=g.data.status==="active"?"Operación en curso. Mantén tu ubicación compartida para apoyar al equipo.":"La operación no está activa.";
