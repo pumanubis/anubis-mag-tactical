@@ -1,4 +1,4 @@
-const CACHE_NAME="anubis-tactical-v2";
+const CACHE_NAME="anubis-tactical-v3";
 const APP_FILES=["./","./index.html","./manifest.webmanifest","./anubis-mag-logo-oliva.png.png"];
 const STATIC_HOSTS=["cdn.jsdelivr.net","unpkg.com","cdnjs.cloudflare.com","tile.openstreetmap.org"];
 self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(APP_FILES)).then(()=>self.skipWaiting()));});
@@ -13,6 +13,9 @@ self.addEventListener("fetch",event=>{
  event.respondWith((async()=>{
   const cache=await caches.open(CACHE_NAME);
   const cached=await cache.match(req);
+  if(sameOrigin&&req.mode==="navigate"){
+   try{const fresh=await fetch(req,{cache:"no-store"});if(fresh.ok)await cache.put("./index.html",fresh.clone());return fresh;}catch{return cached||(await cache.match("./index.html"))||new Response("Sin conexión",{status:503});}
+  }
   if(cached)return cached;
   try{
    const response=await fetch(req);
