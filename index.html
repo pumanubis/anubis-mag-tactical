@@ -184,8 +184,12 @@ async function createPlayer(){
  const body={callsign:$("playerCallsign").value.trim(),username:$("playerUsername").value.trim().toLowerCase(),pin:$("playerPin").value,team_id:$("playerTeam").value,game_id:currentGame.id};
  if(body.callsign.length<2||body.callsign.length>40||!/^[a-z0-9_-]{3,32}$/.test(body.username)||!/^[0-9]{4}$/.test(body.pin)){msg("playerMsg","Verifica indicativo (2 a 40 caracteres), usuario (3 a 32 letras minúsculas, números, guion o guion bajo) y PIN de cuatro dígitos.");return;}
  if(!currentTeams.some(t=>t.id===body.team_id&&t.game_id===body.game_id)){msg("playerMsg","El equipo no corresponde a esta partida. Vuelve a abrir la operación.");return;}
- msg("playerMsg","Registrando jugador...");
+ msg("playerMsg","Verificando equipo y partida...");
  try{
+  const {data:verifiedTeam,error:teamError}=await db.from("teams").select("id,game_id,name").eq("id",body.team_id).eq("game_id",body.game_id).maybeSingle();
+  if(teamError)throw new Error("No se pudo verificar el equipo: "+teamError.message);
+  if(!verifiedTeam)throw new Error("El equipo seleccionado no está disponible para esta partida. Actualiza y vuelve a abrir la operación.");
+  msg("playerMsg","Registrando jugador...");
   const {data,error}=await db.functions.invoke("admin-create-player",{body});
   if(error){
    let detail="";
