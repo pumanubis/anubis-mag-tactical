@@ -20,7 +20,7 @@ button.secondary{background:#394735;border:1px solid #66765b}button.danger{backg
 .row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1;min-width:140px}.topline{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .hidden{display:none!important}.gold{color:var(--gold)}.status{padding:9px 11px;border-radius:8px;background:#111a10;color:#c9d4be;font-size:12px;margin-top:8px;overflow-wrap:anywhere}
 .card{border:1px solid #43513b;border-radius:10px;padding:12px;margin:9px 0;background:#192319}.tag{font-size:10px;padding:4px 8px;border-radius:20px;background:#394735;color:#e7dfb9}.tag.red{background:#713d35}.tag.blue{background:#294e72}.tag.green{background:#3e623d}.tag.yellow{background:#75652d}
-#map{height:330px;border-radius:10px;border:1px solid var(--line);z-index:1}.actions{display:flex;gap:6px;flex-wrap:wrap}.actions button{flex:1;min-width:120px}
+#map,#adminMap,#playerMap{height:330px;min-height:330px;width:100%;display:block;border-radius:10px;border:1px solid var(--line);z-index:1;background:#111a10}.actions{display:flex;gap:6px;flex-wrap:wrap}.actions button{flex:1;min-width:120px}
 #qrBox{background:white;border-radius:10px;padding:12px;display:inline-block;margin:10px 0}#qrBox img{display:block}
 #reader{width:100%;max-width:480px;margin:10px auto;border-radius:10px;overflow:hidden}
 hr{border:0;border-top:1px solid var(--line);margin:14px 0}
@@ -269,7 +269,7 @@ async function loadPlayerMap(){
  if(!mapPlayer){mapPlayer=L.map("playerMap").setView(pts.length?pts[0]:[4.65,-74.1],pts.length?14:5);L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap"}).addTo(mapPlayer);}else{mapPlayer.eachLayer(l=>{if(l instanceof L.Marker||l instanceof L.Circle)L.removeLayer(l);});}
  objectives.filter(x=>x.latitude!=null).forEach(x=>L.marker([x.latitude,x.longitude]).addTo(mapPlayer).bindPopup("Objetivo: "+escapeHtml(x.name)));
  locs.forEach(x=>L.circleMarker([x.latitude,x.longitude],{radius:8,color:"#8bb8e8"}).addTo(mapPlayer).bindPopup("Compañero: "+escapeHtml(names.get(x.user_id)||"Operador")));
- setTimeout(()=>mapPlayer.invalidateSize(),250);
+ setTimeout(()=>{mapPlayer.invalidateSize();if(pts.length){mapPlayer.fitBounds(L.latLngBounds(pts),{padding:[28,28],maxZoom:17});}},300);
 }
 async function startScanner(){
  if(!currentGame||currentGame.status!=="active"){msg("captureMsg","La partida debe estar activa para capturar.");return;}
