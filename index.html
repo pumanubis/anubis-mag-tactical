@@ -75,7 +75,6 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 </div>
 <div class="panel">
 <h2>JUGADORES Y EQUIPOS</h2>
-<label>Indicativo / nombre</label><input id="playerCallsign" maxlength="40" placeholder="Ej. Puma 01">
 <label>Usuario de acceso</label><input id="playerUsername" maxlength="32" placeholder="Ej. puma01">
 <label>PIN de cuatro dígitos</label><input id="playerPin" inputmode="numeric" maxlength="4" placeholder="••••">
 <label>Equipo</label><select id="playerTeam"></select>
@@ -181,8 +180,8 @@ async function sha256(v){const h=await crypto.subtle.digest("SHA-256",new TextEn
 async function useCurrentPosition(latId,lngId){if(!navigator.geolocation){alert("Este navegador no ofrece GPS.");return;}navigator.geolocation.getCurrentPosition(p=>{$(latId).value=p.coords.latitude.toFixed(7);$(lngId).value=p.coords.longitude.toFixed(7);},e=>alert("No se pudo obtener la ubicación: "+e.message),{enableHighAccuracy:true,timeout:15000});}
 async function createPlayer(){
  if(!currentGame){msg("playerMsg","Selecciona una partida.");return;}
- const body={callsign:$("playerCallsign").value.trim(),username:$("playerUsername").value.trim().toLowerCase(),pin:$("playerPin").value,team_id:$("playerTeam").value,game_id:currentGame.id};
- if(body.callsign.length<2||body.callsign.length>40||!/^[a-z0-9_-]{3,32}$/.test(body.username)||!/^[0-9]{4}$/.test(body.pin)){msg("playerMsg","Verifica indicativo (2 a 40 caracteres), usuario (3 a 32 letras minúsculas, números, guion o guion bajo) y PIN de cuatro dígitos.");return;}
+ const body={callsign:$("playerUsername").value.trim().toLowerCase(),username:$("playerUsername").value.trim().toLowerCase(),pin:$("playerPin").value,team_id:$("playerTeam").value,game_id:currentGame.id};
+ if(body.callsign.length<2||body.callsign.length>40||!/^[a-z0-9_-]{3,32}$/.test(body.username)||!/^[0-9]{4}$/.test(body.pin)){msg("playerMsg","Verifica usuario (3 a 32 letras minúsculas, números, guion o guion bajo) y PIN de cuatro dígitos.");return;}
  if(!currentTeams.some(t=>t.id===body.team_id&&t.game_id===body.game_id)){msg("playerMsg","El equipo no corresponde a esta partida. Vuelve a abrir la operación.");return;}
  msg("playerMsg","Verificando equipo y partida...");
  try{
@@ -198,7 +197,7 @@ async function createPlayer(){
   }
   if(!data?.success)throw new Error(data?.error||"No se pudo registrar el jugador.");
   msg("playerMsg","Jugador registrado: "+data.username+". Entrégale su usuario y PIN.");
-  $("playerCallsign").value="";$("playerUsername").value="";$("playerPin").value="";
+  $("playerUsername").value="";$("playerPin").value="";
   await selectGame(currentGame.id);
  }catch(e){msg("playerMsg",e.message||"Error inesperado de registro.");}
 }
