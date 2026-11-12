@@ -255,7 +255,12 @@ async function unlockAssignment(id){
 function setAdminSatellite(satellite){adminSatellite=satellite;if(!mapAdmin)return;if(adminTileLayer)mapAdmin.removeLayer(adminTileLayer);adminTileLayer=L.tileLayer(satellite?"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}":"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:satellite?"Imagery © Esri":"© OpenStreetMap",maxZoom:19}).addTo(mapAdmin);adminTileLayer.bringToBack();}
 function renderAdminObjectivesList(){
  const visible=currentObjectives.filter(o=>$("showCapturedObjectives")?.checked||o.status!=="captured");
- $("objectivesList").innerHTML=visible.length?visible.map(o=>'<div class="card"><div class="topline"><b>'+escapeHtml(o.name)+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+o.status+'</span></div><div class="small">'+(o.latitude!=null?Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+' · radio '+o.radius_m+' m</div><button class="secondary" onclick="editObjectiveLocation(\''+o.id+'\')">EDITAR UBICACIÓN</button> <button class="secondary" onclick="deleteObjective(\''+o.id+'\')">ELIMINAR OBJETIVO</button>')+'</div>').join(""):"No hay objetivos pendientes. Crea uno nuevo o consulta el historial.";
+ $("objectivesList").innerHTML=visible.length?visible.map(o=>{
+  const head='<div class="card"><div class="topline"><b>'+escapeHtml(o.name)+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+escapeHtml(o.status)+'</span></div>';
+  const info='<div class="small">'+(o.latitude!=null?Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+' · radio '+Number(o.radius_m||0)+' m</div>';
+  const actions=o.status==="captured"?'<p class="small">Capturado: se conserva en el historial. Crea otro objetivo para una nueva prueba.</p>':'<button class="secondary" onclick="editObjectiveLocation(\''+o.id+'\')">EDITAR UBICACIÓN</button> <button class="secondary" onclick="deleteObjective(\''+o.id+'\')">ELIMINAR OBJETIVO</button>';
+  return head+info+actions+'</div>';
+ }).join(""):"No hay objetivos pendientes. Crea uno nuevo o consulta el historial.";
 }
 async function deleteObjective(id){
  if(!currentGame)return;
