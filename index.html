@@ -301,7 +301,7 @@ let tacticalCameraStream=null;
 function showAR(url,name){
  stopTacticalCamera();
  const src=decodeURIComponent(url);
- $("arArea").innerHTML='<h3>'+escapeHtml(name)+'</h3><p id="arLoadStatus" class="small">Preparando objeto 3D...</p><div id="tacticalCameraStage" style="position:relative;height:380px;background:#273424;border-radius:12px;overflow:hidden"><video id="tacticalCameraVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:2"></video><model-viewer id="arModelViewer" src="'+escapeHtml(src)+'" ar ar-modes="webxr scene-viewer quick-look" ar-placement="floor" camera-controls shadow-intensity="1" exposure="1.5" style="position:absolute;inset:0;width:100%;height:100%;background:#273424;z-index:1" alt="Modelo 3D del objetivo"></model-viewer></div><button id="launchARButton" onclick="launchTacticalAR()">📷 MOSTRAR OBJETO EN MI CÁMARA</button><button class="secondary" onclick="launchNativeTacticalAR()">PROBAR RA ANCLADA AL SUELO (SI ES COMPATIBLE)</button><button class="secondary" onclick="stopTacticalCamera()">CERRAR CÁMARA</button><p class="small">La primera opción muestra la cámara y un recuadro 3D que puedes girar; no coloca el objeto sobre el suelo. La segunda usa RA espacial cuando el teléfono la admite.</p>';
+ $("arArea").innerHTML='<h3>'+escapeHtml(name)+'</h3><p id="arLoadStatus" class="small">Preparando objeto 3D...</p><div id="tacticalCameraStage" style="position:relative;height:380px;background:#273424;border-radius:12px;overflow:hidden"><video id="tacticalCameraVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:2"></video><model-viewer id="arModelViewer" src="'+escapeHtml(src)+'" ar ar-modes="webxr" ar-placement="floor" camera-controls shadow-intensity="1" exposure="1.5" style="position:absolute;inset:0;width:100%;height:100%;background:#273424;z-index:1" alt="Modelo 3D del objetivo"></model-viewer></div><button id="launchARButton" onclick="launchTacticalAR()">📷 MOSTRAR OBJETO EN MI CÁMARA</button><button class="secondary" onclick="launchNativeTacticalAR()">COLOCAR OBJETO EN EL SUELO (RA REAL)</button><button class="secondary" onclick="stopTacticalCamera()">CERRAR CÁMARA</button><p class="small">La primera opción muestra la cámara y un recuadro 3D que puedes girar; no coloca el objeto sobre el suelo. La segunda usa RA espacial cuando el teléfono la admite.</p>';
  const viewer=$("arModelViewer");
  viewer.addEventListener("load",()=>{$("arLoadStatus").textContent="Objeto 3D listo. Pulsa MOSTRAR OBJETO EN MI CÁMARA.";});
  viewer.addEventListener("error",()=>{$("arLoadStatus").textContent="No se pudo cargar el objeto 3D. Revisa tu conexión.";});
@@ -325,10 +325,18 @@ function stopTacticalCamera(){
  if(tacticalCameraStream){tacticalCameraStream.getTracks().forEach(t=>t.stop());tacticalCameraStream=null;}
  const video=$("tacticalCameraVideo");if(video){video.pause();video.srcObject=null;video.style.display="none";}const viewer=$("arModelViewer");if(viewer){viewer.style.cssText="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:#273424";}
 }
-function launchNativeTacticalAR(){
- const viewer=$("arModelViewer");if(!viewer)return;
- if(!viewer.canActivateAR){$("arLoadStatus").textContent="Este Samsung o navegador no tiene RA espacial compatible. Puedes usar la cámara con objeto superpuesto.";return;}
- viewer.activateAR().catch(e=>{$("arLoadStatus").textContent="La RA espacial falló: "+e.message+". Usa la cámara con objeto superpuesto.";});
+async function launchNativeTacticalAR(){
+ const viewer=$("arModelViewer"),status=$("arLoadStatus");if(!viewer)return;
+ stopTacticalCamera();
+ status.textContent="Comprobando realidad aumentada con seguimiento del suelo...";
+ try{
+  await loadTacticalModelViewer();
+  if(!navigator.xr){status.textContent="Tu navegador no dispone de WebXR. Abre esta página directamente en Chrome para Android, no desde el navegador de otra aplicación.";return;}
+  const supported=await navigator.xr.isSessionSupported("immersive-ar");
+  if(!supported||!viewer.canActivateAR){status.textContent="El dispositivo no admite RA espacial WebXR. Comprueba que Google Play Services for AR esté instalado y actualizado. La vista de cámara normal sigue disponible.";return;}
+  status.textContent="Iniciando RA real: mueve el teléfono lentamente para detectar el suelo.";
+  await viewer.activateAR();
+ }catch(e){status.textContent="No se pudo iniciar RA espacial: "+(e.message||e)+". La vista de cámara normal sigue disponible.";}
 }
 let myGps=null,gpsWatchId=null,gpsLastSync=0,gpsLastMapRefresh=0,gpsLiveMarker=null,gpsLiveLine=null,gpsObjectives=[],gpsLiveBusy=false,gpsPollTimer=null,gpsPollBusy=false,gpsLastFixAt=0,gpsLastAccuracy=null;
 let tacticalSatellite=false,tacticalTileLayer=null,deviceHeading=null,compassEnabled=false,compassHandler=null,lastGpsPoint=null;
