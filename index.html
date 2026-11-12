@@ -136,10 +136,10 @@ async function enterApp(user){
  }
  currentProfile=profile;$("login").classList.add("hidden");$("app").classList.remove("hidden");$("welcome").textContent="BIENVENIDO, "+profile.nickname.toUpperCase();$("roleTag").textContent=profile.role==="admin"?"ADMINISTRADOR":"OPERADOR";
  if(profile.role==="admin"){$("adminView").classList.remove("hidden");$("playerView").classList.add("hidden");if(navigator.onLine)await loadGames();else $("gamesList").textContent="Sin conexión. Las operaciones se actualizarán al recuperar internet.";}
- else{$("playerView").classList.remove("hidden");$("adminView").classList.add("hidden");await loadPlayerGame();}
+ else{$("playerView").classList.remove("hidden");autoStartTacticalCompass();$("adminView").classList.add("hidden");await loadPlayerGame();}
  if(navigator.onLine)syncPendingCaptures();
 }
-async function logout(){stopLiveGps();await stopScanner();await db.auth.signOut();currentUser=null;currentProfile=null;currentGame=null;$("app").classList.add("hidden");$("login").classList.remove("hidden");$("pin").value="";}
+async function logout(){if(compassHandler){window.removeEventListener("deviceorientation",compassHandler,true);compassHandler=null;}deviceHeading=null;compassEnabled=false;stopLiveGps();await stopScanner();await db.auth.signOut();currentUser=null;currentProfile=null;currentGame=null;$("app").classList.add("hidden");$("login").classList.remove("hidden");$("pin").value="";}
 async function createGame(){
  const name=$("gameName").value.trim(),count=Number($("teamCount").value);if(name.length<3){msg("createMsg","El nombre debe tener al menos 3 caracteres.");return;}
  try{const {data,error}=await db.rpc("create_game_with_teams",{p_name:name,p_team_count:count});if(error)throw error;$("gameName").value="";msg("createMsg","Partida creada con "+count+" equipos.");await loadGames();await selectGame(data);}
@@ -255,7 +255,32 @@ let tacticalSatellite=false,tacticalTileLayer=null,deviceHeading=null,compassEna
 function setTacticalMapLayer(satellite){tacticalSatellite=satellite;if(!mapPlayer||!window.L)return;if(tacticalTileLayer)mapPlayer.removeLayer(tacticalTileLayer);tacticalTileLayer=L.tileLayer(satellite?"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}":"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:satellite?"Imagery © Esri, Maxar, Earthstar Geographics":"© OpenStreetMap",maxZoom:19}).addTo(mapPlayer);tacticalTileLayer.bringToBack();}
 function compassBearing(a,b){const rad=Math.PI/180,dlon=(b[1]-a[1])*rad,y=Math.sin(dlon)*Math.cos(b[0]*rad),x=Math.cos(a[0]*rad)*Math.sin(b[0]*rad)-Math.sin(a[0]*rad)*Math.cos(b[0]*rad)*Math.cos(dlon);return(Math.atan2(y,x)*180/Math.PI+360)%360;}
 function refreshTacticalCompass(){const arrow=$("compassArrow"),info=$("compassInfo");if(!arrow||!info)return;if(!myGps||!gpsObjectives.length){info.textContent="Activa el GPS y selecciona un objetivo con coordenadas.";return;}const nearest=gpsObjectives.filter(o=>o.latitude!=null&&o.longitude!=null).map(o=>({name:o.name,pos:[Number(o.latitude),Number(o.longitude)]})).sort((a,b)=>metersBetween(myGps,a.pos)-metersBetween(myGps,b.pos))[0];if(!nearest)return;const bearing=compassBearing(myGps,nearest.pos);arrow.style.transform="rotate("+((bearing-(deviceHeading??0)+360)%360)+"deg)";info.textContent=nearest.name+" · Rumbo "+Math.round(bearing)+"° "+(deviceHeading===null?"respecto al norte; activa la brújula para orientación al girar el teléfono.":"· Flecha orientada según el teléfono.");}
-async function enableTacticalCompass(){if(!window.DeviceOrientationEvent){$("compassInfo").textContent="Este navegador no ofrece sensor de orientación. La flecha indica el rumbo respecto al norte.";return;}try{if(typeof DeviceOrientationEvent.requestPermission==="function"){const permission=await DeviceOrientationEvent.requestPermission();if(permission!=="granted")throw Error("Permiso denegado");}if(compassHandler)window.removeEventListener("deviceorientation",compassHandler);compassHandler=e=>{const heading=typeof e.webkitCompassHeading==="number"?e.webkitCompassHeading:typeof e.alpha==="number"?(360-e.alpha)%360:null;if(heading!==null){deviceHeading=heading;refreshTacticalCompass();}};window.addEventListener("deviceorientation",compassHandler,true);compassEnabled=true;$("compassEnableBtn").textContent="BRÚJULA ACTIVADA";}catch(e){$("compassInfo").textContent="No se pudo activar la orientación: "+e.message;}}
+function listenTacticalCompass(){
+ if(!window.DeviceOrientationEvent)return false;
+ if(compassHandler)window.removeEventListener("deviceorientation",compassHandler,true);
+ compassHandler=e=>{
+  const heading=typeof e.webkitCompassHeading==="number"?e.webkitCompassHeading:typeof e.alpha==="number"?(360-e.alpha)%360:null;
+  if(heading!==null){deviceHeading=heading;compassEnabled=true;refreshTacticalCompass();}
+ };
+ window.addEventListener("deviceorientation",compassHandler,true);
+ return true;
+}
+function autoStartTacticalCompass(){
+ const btn=$("compassEnableBtn");if(!btn)return;
+ if(!window.DeviceOrientationEvent){btn.style.display="none";return;}
+ if(typeof DeviceOrientationEvent.requestPermission==="function"){
+  btn.style.display="inline-block";btn.textContent="PERMITIR SENSOR DE BRÚJULA";
+ }else{btn.style.display="none";listenTacticalCompass();}
+}
+async function enableTacticalCompass(){
+ try{
+  if(typeof DeviceOrientationEvent.requestPermission==="function"){
+   const permission=await DeviceOrientationEvent.requestPermission();
+   if(permission!=="granted")throw Error("Permiso denegado");
+  }
+  listenTacticalCompass();$("compassEnableBtn").style.display="none";
+ }catch(e){$("compassInfo").textContent="No se pudo activar el sensor: "+e.message;}
+}
 function metersBetween(a,b){const rad=Math.PI/180,dlat=(b[0]-a[0])*rad,dlon=(b[1]-a[1])*rad,h=Math.sin(dlat/2)**2+Math.cos(a[0]*rad)*Math.cos(b[0]*rad)*Math.sin(dlon/2)**2;return 12742000*Math.asin(Math.min(1,Math.sqrt(h)));}
 function updateGpsNavigation(objectives){
  const box=$("gpsNavigation");if(!box)return;
