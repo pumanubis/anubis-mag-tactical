@@ -84,9 +84,9 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 </div>
 <div class="cols">
 <div class="panel"><h2>ASIGNAR OBJETIVOS</h2><label>Jugador</label><select id="assignPlayer"></select><label>Objetivos</label><div id="assignObjectives" class="muted"></div><label><input id="assignSecret" type="checkbox" style="width:auto"> Marcar como misión secreta</label><button onclick="assignObjectives()">ASIGNAR MISIONES</button><p id="assignMsg" class="status hidden"></p><div id="assignedMissions"></div></div>
-<div class="panel"><h2>MAPA DE OPERACIONES</h2><div id="adminMap"></div><p class="small">Los marcadores representan objetivos con coordenadas GPS.</p></div>
+<div class="panel"><h2>MAPA DE OPERACIONES</h2><div class="actions"><button class="secondary" onclick="setAdminSatellite(false)">MAPA NORMAL</button><button onclick="setAdminSatellite(true)">SATÉLITE</button></div><div id="adminMap"></div><p class="small">Los marcadores representan objetivos con coordenadas GPS. Para reubicar uno, pulsa EDITAR UBICACIÓN y después toca el nuevo punto en el mapa.</p></div>
 </div>
-<div class="panel"><h2>OBJETIVOS CREADOS</h2><div id="objectivesList"></div></div>
+<div class="panel"><h2>OBJETIVOS CREADOS</h2><div id="objectivesList"></div><div id="editObjectivePanel" class="card hidden"><h2>EDITAR UBICACIÓN DEL OBJETIVO</h2><p id="editObjectiveName" class="gold"></p><p class="small">Escribe coordenadas o toca un punto del mapa de operaciones. El QR y las asignaciones se conservarán.</p><div class="row"><div><label>Latitud</label><input id="editObjLat" type="number" step="any"></div><div><label>Longitud</label><input id="editObjLng" type="number" step="any"></div></div><div class="actions"><button class="secondary" onclick="useCurrentPosition('editObjLat','editObjLng')">USAR MI GPS</button><button onclick="saveObjectiveLocation()">GUARDAR NUEVA UBICACIÓN</button><button class="secondary" onclick="cancelObjectiveLocation()">CANCELAR</button></div><p id="editObjectiveStatus" class="small"></p></div></div>
 </div>
 </section>
 
@@ -107,7 +107,7 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 const SUPABASE_URL="https://qpdbswjjlpgczpubefst.supabase.co";
 const SUPABASE_KEY="sb_publishable_k-y-PRQyuSWGXiuyHqP5aw_RQlZySZ4";
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let currentUser=null,currentProfile=null,currentGame=null,currentTeams=[],currentPlayers=[],currentObjectives=[],mapAdmin=null,mapPlayer=null,scanner=null;
+let currentUser=null,currentProfile=null,currentGame=null,currentTeams=[],currentPlayers=[],currentObjectives=[],mapAdmin=null,mapPlayer=null,scanner=null,editingObjectiveId=null,adminSatellite=false,adminTileLayer=null,adminEditMarker=null;
 const colors={red:"Rojo",blue:"Azul",green:"Verde",yellow:"Amarillo"};
 const $=id=>document.getElementById(id);
 const msg=(id,text)=>{$(id).textContent=text;$(id).classList.remove("hidden")};
@@ -157,7 +157,9 @@ async function selectGame(id){
  $("playerTeam").innerHTML=currentTeams.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join("");
  $("assignPlayer").innerHTML=currentPlayers.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.callsign)+'</option>').join("");
  $("playersList").innerHTML=currentPlayers.length?currentPlayers.map(p=>'<div class="card"><b>'+escapeHtml(p.callsign)+'</b><div class="small">'+(currentTeams.find(t=>t.id===p.team_id)?.name||"Equipo")+' · '+p.status+'</div></div>').join(""):"No hay jugadores registrados.";
- $("objectivesList").innerHTML=currentObjectives.length?currentObjectives.map(o=>'<div class="card"><div class="topline"><b>'+escapeHtml(o.name)+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+o.status+'</span></div><div class="small">'+(o.latitude!=null?Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+' · radio '+o.radius_m+' m</div></div>').join(""):"No hay objetivos registrados.";
+ $("objectivesList").innerHTML=currentObjectives.length?currentObjectives.map(o=>'<div class="card"><div class="topline"><b>'+escapeHtml(o.name)+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+o.status+'</span></div><div class="small">'+(o.latitude!=null?Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+' · radio '+o.radius_m+' m</div><button class="secondary" onclick="editObjectiveLocation(\''+o.id+'\')">EDITAR UBICACIÓN</button></div>').join(""):"No hay objetivos registrados.";
+ if(editingObjectiveId){const edited=currentObjectives.find(o=>o.id===editingObjectiveId);if(!edited)cancelObjectiveLocation();else $("editObjectiveName").textContent=edited.name;}
+
  $("assignObjectives").innerHTML=currentObjectives.map(o=>'<label><input type="checkbox" value="'+o.id+'" style="width:auto"> '+escapeHtml(o.name)+'</label>').join("")||"Primero crea objetivos.";
  await loadAssignedMissions();renderAdminMap();
 }
@@ -215,9 +217,16 @@ async function unlockAssignment(id){
  const {error}=await db.from("objective_assignments").update({unlocked_at:new Date().toISOString()}).eq("id",id);
  if(error){alert(error.message);return;}await loadAssignedMissions();alert("Misión desbloqueada para el jugador.");
 }
+function setAdminSatellite(satellite){adminSatellite=satellite;if(!mapAdmin)return;if(adminTileLayer)mapAdmin.removeLayer(adminTileLayer);adminTileLayer=L.tileLayer(satellite?"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}":"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:satellite?"Imagery © Esri":"© OpenStreetMap",maxZoom:19}).addTo(mapAdmin);adminTileLayer.bringToBack();}
+function editObjectiveLocation(id){const obj=currentObjectives.find(o=>o.id===id);if(!obj)return;editingObjectiveId=id;$("editObjectivePanel").classList.remove("hidden");$("editObjectiveName").textContent=obj.name;$("editObjLat").value=obj.latitude??"";$("editObjLng").value=obj.longitude??"";$("editObjectiveStatus").textContent="Toca el mapa para elegir el nuevo punto, o escribe las coordenadas.";if(mapAdmin&&obj.latitude!=null&&obj.longitude!=null)mapAdmin.setView([Number(obj.latitude),Number(obj.longitude)],Math.max(mapAdmin.getZoom(),16));updateAdminEditMarker();$("editObjectivePanel").scrollIntoView({behavior:"smooth",block:"nearest"});}
+function cancelObjectiveLocation(){editingObjectiveId=null;$("editObjectivePanel").classList.add("hidden");if(adminEditMarker&&mapAdmin){mapAdmin.removeLayer(adminEditMarker);adminEditMarker=null;}}
+function updateAdminEditMarker(){if(!mapAdmin)return;if(adminEditMarker){mapAdmin.removeLayer(adminEditMarker);adminEditMarker=null;}if(!editingObjectiveId)return;const lat=Number($("editObjLat").value),lng=Number($("editObjLng").value);if($("editObjLat").value!==""&&$("editObjLng").value!==""&&Number.isFinite(lat)&&Number.isFinite(lng))adminEditMarker=L.circleMarker([lat,lng],{radius:12,color:"#f1ca52",weight:3,fillColor:"#f1ca52",fillOpacity:.5}).addTo(mapAdmin).bindPopup("Nueva ubicación propuesta");}
+async function saveObjectiveLocation(){if(!editingObjectiveId||!currentGame)return;const lat=Number($("editObjLat").value),lng=Number($("editObjLng").value);if(!$("editObjLat").value.trim()||!$("editObjLng").value.trim()||!Number.isFinite(lat)||!Number.isFinite(lng)||lat< -90||lat>90||lng< -180||lng>180){$("editObjectiveStatus").textContent="Ingresa coordenadas válidas.";return;}if(!navigator.onLine){$("editObjectiveStatus").textContent="Conéctate a internet para guardar el cambio.";return;}const id=editingObjectiveId;$("editObjectiveStatus").textContent="Guardando nueva ubicación...";const {data,error}=await db.from("objectives").update({latitude:lat,longitude:lng}).eq("id",id).eq("game_id",currentGame.id).select("id").single();if(error||!data){$("editObjectiveStatus").textContent="No se pudo actualizar: "+(error?.message||"Verifica permisos de administrador.");return;}cancelObjectiveLocation();await selectGame(currentGame.id);alert("Ubicación actualizada. El QR y las asignaciones existentes no cambiaron. Los jugadores deben actualizar el mapa para ver el nuevo punto.");}
 function renderAdminMap(){
- if(!window.L)return;const pts=currentObjectives.filter(o=>o.latitude!=null&&o.longitude!=null);if(!mapAdmin){mapAdmin=L.map("adminMap").setView(pts.length?[pts[0].latitude,pts[0].longitude]:[4.65,-74.1],pts.length?14:5);L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap"}).addTo(mapAdmin);}else{mapAdmin.eachLayer(l=>{if(l instanceof L.Marker||l instanceof L.Circle)L.removeLayer(l);});}
- pts.forEach(o=>{L.marker([o.latitude,o.longitude]).addTo(mapAdmin).bindPopup(escapeHtml(o.name));L.circle([o.latitude,o.longitude],{radius:o.radius_m,color:"#d5bd68"}).addTo(mapAdmin);});setTimeout(()=>mapAdmin.invalidateSize(),200);
+ if(!window.L)return;const pts=currentObjectives.filter(o=>o.latitude!=null&&o.longitude!=null);
+ if(!mapAdmin){mapAdmin=L.map("adminMap").setView(pts.length?[pts[0].latitude,pts[0].longitude]:[4.65,-74.1],pts.length?14:5);mapAdmin.on("click",e=>{if(!editingObjectiveId)return;$("editObjLat").value=e.latlng.lat.toFixed(7);$("editObjLng").value=e.latlng.lng.toFixed(7);$("editObjectiveStatus").textContent="Punto seleccionado. Pulsa GUARDAR NUEVA UBICACIÓN para confirmar.";updateAdminEditMarker();});setAdminSatellite(adminSatellite);}
+ else{mapAdmin.eachLayer(l=>{if(l instanceof L.Marker||l instanceof L.Circle||l instanceof L.CircleMarker)mapAdmin.removeLayer(l);});adminEditMarker=null;}
+ pts.forEach(o=>{L.marker([o.latitude,o.longitude]).addTo(mapAdmin).bindPopup(escapeHtml(o.name));L.circle([o.latitude,o.longitude],{radius:o.radius_m,color:"#d5bd68"}).addTo(mapAdmin);});updateAdminEditMarker();setTimeout(()=>mapAdmin.invalidateSize(),200);
 }
 async function loadPlayerGame(){
  if(!navigator.onLine){
