@@ -294,20 +294,43 @@ function renderPlayerSnapshot(snap,offline){
  currentGame=g;currentTeams=[t];currentPlayers=[gp];
  $("playerGameInfo").innerHTML="<b>"+escapeHtml(g.name)+"</b><br>Indicativo: "+escapeHtml(gp.callsign)+" · Equipo: "+escapeHtml(t.name)+" <span class='tag "+t.color+"'>"+(colors[t.color]||t.color)+"</span><br>Estado: "+g.status;
  $("playerStatus").textContent=offline?"MODO SIN CONEXIÓN. Los escaneos quedarán pendientes y se sincronizarán al recuperar internet.":(g.status==="active"?"Operación en curso. Mantén tu ubicación compartida para apoyar al equipo.":"La operación no está activa.");
- $("myObjectives").innerHTML=assignments.length?assignments.map(x=>{const o=x.objectives||{};const virtual=o.objective_type==="virtual";return '<div class="card"><div class="topline"><b>'+escapeHtml(o.name||"Misión")+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+(o.status==="captured"?"CAPTURADO":x.status.toUpperCase())+'</span></div>'+(x.is_secret?'<span class="tag yellow">MISIÓN SECRETA</span>':"")+'<p class="small">'+(virtual?"OBJETIVO VIRTUAL GPS · ":"OBJETIVO FÍSICO QR · ")+(o.latitude!=null?"GPS: "+Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+'</p>'+(o.visual_description?'<p>'+escapeHtml(o.visual_description)+'</p>':"")+(o.ar_asset_url?'<button class="secondary" onclick="showAR(\''+encodeURIComponent(o.ar_asset_url)+'\',\''+escapeHtml(o.name)+'\')">📷 VER OBJETO EN CÁMARA RA</button>':"")+(virtual&&o.status!=="captured"?'<button onclick="captureVirtualObjective(\''+o.id+'\')">CAPTURAR OBJETIVO VIRTUAL GPS</button>':"")+'</div>';}).join(""):"No tienes misiones asignadas todavía.";
+ $("myObjectives").innerHTML=assignments.length?assignments.map(x=>{const o=x.objectives||{};const virtual=o.objective_type==="virtual";return '<div class="card"><div class="topline"><b>'+escapeHtml(o.name||"Misión")+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+(o.status==="captured"?"CAPTURADO":x.status.toUpperCase())+'</span></div>'+(x.is_secret?'<span class="tag yellow">MISIÓN SECRETA</span>':"")+'<p class="small">'+(virtual?"OBJETIVO VIRTUAL GPS · ":"OBJETIVO FÍSICO QR · ")+(o.latitude!=null?"GPS: "+Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+'</p>'+(o.visual_description?'<p>'+escapeHtml(o.visual_description)+'</p>':"")+(o.ar_asset_url?'<button class="secondary" onclick="showAR(\''+encodeURIComponent(o.ar_asset_url)+'\',\''+escapeHtml(o.name)+'\',\''+o.id+'\')">📷 VER OBJETO EN CÁMARA RA</button>':"")+(virtual&&o.status!=="captured"?'<button onclick="captureVirtualObjective(\''+o.id+'\')">CAPTURAR OBJETIVO VIRTUAL GPS</button>':"")+'</div>';}).join(""):"No tienes misiones asignadas todavía.";
  $("arArea").textContent="Los modelos 3D se abrirán aquí cuando una misión tenga un archivo GLB/GLTF configurado por el administrador.";
 }
 let tacticalCameraStream=null;
-function showAR(url,name){
+function showAR(url,name,objectiveId){
  stopTacticalCamera();
  const src=decodeURIComponent(url);
  $("arArea").innerHTML='<h3>'+escapeHtml(name)+'</h3><p id="arLoadStatus" class="small">Preparando objeto 3D...</p><div id="tacticalCameraStage" style="position:relative;height:380px;background:#273424;border-radius:12px;overflow:hidden"><video id="tacticalCameraVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:2"></video><model-viewer id="arModelViewer" src="'+escapeHtml(src)+'" ar ar-modes="webxr" ar-placement="floor" camera-controls shadow-intensity="1" exposure="1.5" style="position:absolute;inset:0;width:100%;height:100%;background:#273424;z-index:1" alt="Modelo 3D del objetivo"></model-viewer></div><button id="launchARButton" onclick="launchTacticalAR()">📷 MOSTRAR OBJETO EN MI CÁMARA</button><button class="secondary" onclick="launchNativeTacticalAR()">COLOCAR OBJETO EN EL SUELO (RA REAL)</button><button class="secondary" onclick="stopTacticalCamera()">CERRAR CÁMARA</button><p class="small">La primera opción muestra la cámara y un recuadro 3D que puedes girar; no coloca el objeto sobre el suelo. La segunda usa RA espacial cuando el teléfono la admite.</p>';
+ const assigned=(JSON.parse(localStorage.getItem("anubis_player_"+(currentUser?.id||""))||"null")?.assignments||[]).find(x=>x.objectives?.id===objectiveId);
+ const objective=assigned?.objectives;
+ if(objective?.objective_type==="virtual"){
+  const block=document.createElement("div");block.id="arCapturePanel";block.className="card";
+  block.innerHTML='<p id="arGpsStatus" class="small">Pulsa COMPROBAR DISTANCIA para verificar si estás dentro del radio GPS de '+Number(objective.radius_m||35)+' m.</p><button onclick="checkARGpsDistance(\''+objectiveId+'\')">📍 COMPROBAR DISTANCIA GPS</button>'+(objective.status!=="captured"?'<button id="arCaptureButton" onclick="captureVirtualObjective(\''+objectiveId+'\')">🎯 CAPTURAR OBJETIVO VIRTUAL</button>':'<p>Objetivo ya capturado.</p>')+'<p class="small">Después de colocar el objeto en RA, regresa a esta pantalla para registrar la captura. El servidor valida ubicación, precisión y asignación; ver el objeto no significa haberlo capturado.</p>';
+  $("arArea").appendChild(block);
+ }
  const viewer=$("arModelViewer");
  viewer.addEventListener("load",()=>{$("arLoadStatus").textContent="Objeto 3D listo. Pulsa MOSTRAR OBJETO EN MI CÁMARA.";});
  viewer.addEventListener("error",()=>{$("arLoadStatus").textContent="No se pudo cargar el objeto 3D. Revisa tu conexión.";});
  viewer.addEventListener("ar-status",e=>{if(e.detail.status==="failed")$("arLoadStatus").textContent="La RA espacial no pudo iniciarse. Usa MOSTRAR OBJETO EN MI CÁMARA.";});
  $("arArea").scrollIntoView({behavior:"smooth",block:"start"});
  loadTacticalModelViewer().catch(e=>{$("arLoadStatus").textContent="Error del visor 3D: "+e.message;});
+}
+function checkARGpsDistance(id){
+ const status=$("arGpsStatus");if(!status)return;
+ const snap=JSON.parse(localStorage.getItem("anubis_player_"+(currentUser?.id||""))||"null");
+ const objective=snap?.assignments?.find(x=>x.objectives?.id===id)?.objectives;
+ if(!objective||objective.latitude==null||objective.longitude==null){status.textContent="No se encontraron coordenadas para este objetivo.";return;}
+ if(!navigator.geolocation){status.textContent="El GPS no está disponible en este dispositivo.";return;}
+ status.textContent="Obteniendo ubicación precisa...";
+ navigator.geolocation.getCurrentPosition(p=>{
+  const lat1=p.coords.latitude*Math.PI/180,lat2=Number(objective.latitude)*Math.PI/180;
+  const dlat=lat2-lat1,dlon=(Number(objective.longitude)-p.coords.longitude)*Math.PI/180;
+  const h=Math.sin(dlat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dlon/2)**2;
+  const distance=Math.round(6371000*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h)));
+  const radius=Number(objective.radius_m||35);
+  status.textContent="Distancia al objetivo: "+distance+" m · radio permitido: "+radius+" m · precisión GPS: ±"+Math.round(p.coords.accuracy)+" m. "+(distance<=radius?"Estás dentro del radio aproximado. Puedes intentar capturar.":"Acércate "+(distance-radius)+" m más al punto GPS.");
+ },e=>{status.textContent="Error GPS: "+e.message;},{enableHighAccuracy:true,maximumAge:0,timeout:20000});
 }
 async function launchTacticalAR(){
  const status=$("arLoadStatus"),video=$("tacticalCameraVideo");
