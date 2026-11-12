@@ -362,7 +362,7 @@ async function showAR(url,name,objectiveId){
    return;
   }
   $("arLoadStatus").textContent="Dentro de la zona asignada: "+distance+" m del punto (precisión GPS ±"+accuracy+" m). El GPS confirma la zona, no la posición exacta del objeto en la imagen. "+modeMessage;
-  $("arSearchContent").innerHTML='<div id="tacticalCameraStage" style="position:relative;height:380px;background:#273424;border-radius:12px;overflow:hidden"><video id="tacticalCameraVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:2"></video><model-viewer id="arModelViewer" src="'+escapeHtml(decodeURIComponent(url))+'" camera-controls shadow-intensity="1" exposure="1.5" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:#273424" alt="Modelo 3D del objetivo"></model-viewer></div><p class="small">VISTA DE RESPALDO GPS: modelo de referencia, no anclado al terreno. La posición exacta en cámara requiere tecnología geoespacial compatible, todavía no disponible en esta versión.</p><button onclick="launchTacticalAR()">📷 VER REFERENCIA EN CÁMARA</button><button onclick="captureVirtualObjective(\''+objectiveId+'\')">🎯 SOLICITAR CAPTURA GPS</button><button class="secondary" onclick="stopTacticalCamera()">CERRAR CÁMARA</button>';
+  $("arSearchContent").innerHTML='<div id="tacticalCameraStage" style="position:relative;height:380px;background:#273424;border-radius:12px;overflow:hidden"><video id="tacticalCameraVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:2"></video><model-viewer id="arModelViewer" src="'+escapeHtml(decodeURIComponent(url))+'" camera-controls shadow-intensity="1" exposure="1.5" environment-image="neutral" camera-orbit="0deg 75deg 105%" field-of-view="35deg" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:transparent" alt="Modelo 3D del objetivo"></model-viewer></div><p class="small">VISTA DE RESPALDO GPS: modelo superpuesto sin recuadro, no anclado al terreno. La posición exacta en cámara requiere tecnología geoespacial compatible, todavía no disponible en esta versión.</p><button onclick="launchTacticalAR()">📷 VER REFERENCIA EN CÁMARA</button><button onclick="captureVirtualObjective(\''+objectiveId+'\')">🎯 SOLICITAR CAPTURA GPS</button><button class="secondary" onclick="stopTacticalCamera()">CERRAR CÁMARA</button>';
   loadTacticalModelViewer().catch(e=>{$("arLoadStatus").textContent="No se pudo cargar el visor: "+e.message;});
  },e=>{$("arLoadStatus").textContent="No se pudo comprobar tu ubicación: "+e.message;},{enableHighAccuracy:true,maximumAge:0,timeout:20000});
 }
@@ -390,13 +390,13 @@ async function launchTacticalAR(){
   stopTacticalCamera();
   status.textContent="Solicitando permiso de cámara...";
   tacticalCameraStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}}});
-  video.srcObject=tacticalCameraStream;video.style.display="block";await video.play(); const viewer=$("arModelViewer");if(viewer){viewer.style.cssText="position:absolute;right:8px;bottom:8px;width:42%;height:46%;z-index:3;background:#273424;border:2px solid #d5bd68;border-radius:10px";}
-  status.textContent="Cámara activa. El objeto 3D aparece en el recuadro inferior; puedes girarlo con el dedo. Esta es una vista combinada, no RA espacial.";
+  video.srcObject=tacticalCameraStream;video.style.display="block";await video.play(); const viewer=$("arModelViewer");if(viewer){viewer.style.cssText="position:absolute;inset:0;width:100%;height:100%;z-index:3;background:transparent;border:0;pointer-events:none";}
+  status.textContent="Cámara activa: modelo 3D superpuesto sobre la imagen, sin recuadro. Es una vista visual de referencia; el modelo NO está anclado al terreno y se moverá con la cámara.";
  }catch(e){status.textContent="No se pudo activar la cámara: "+e.message+". Revisa el permiso de cámara en Chrome.";stopTacticalCamera();}
 }
 function stopTacticalCamera(){
  if(tacticalCameraStream){tacticalCameraStream.getTracks().forEach(t=>t.stop());tacticalCameraStream=null;}
- const video=$("tacticalCameraVideo");if(video){video.pause();video.srcObject=null;video.style.display="none";}const viewer=$("arModelViewer");if(viewer){viewer.style.cssText="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:#273424";}
+ const video=$("tacticalCameraVideo");if(video){video.pause();video.srcObject=null;video.style.display="none";}const viewer=$("arModelViewer");if(viewer){viewer.style.cssText="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:transparent;pointer-events:auto";}
 }
 async function launchNativeTacticalAR(){
  const viewer=$("arModelViewer"),status=$("arLoadStatus");if(!viewer)return;
