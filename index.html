@@ -65,12 +65,12 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 <div class="cols">
 <div class="panel">
 <h2>OBJETIVOS DE LA OPERACIÓN</h2>
-<label>Nombre del objetivo</label><input id="objectiveName" maxlength="80" placeholder="Ej. Depósito de suministros">
+<label>Tipo de objetivo</label><select id="objectiveType" onchange="updateObjectiveTypeUI()"><option value="physical">FÍSICO (QR)</option><option value="virtual">VIRTUAL (GPS)</option></select><label>Nombre del objetivo</label><input id="objectiveName" maxlength="80" placeholder="Ej. Depósito de suministros">
 <label>Descripción del objeto físico / elemento AR</label><textarea id="objectiveDescription" placeholder="Describe el objeto 3D realista que aparecerá en el terreno..."></textarea>
 <div class="row"><div><label>Latitud</label><input id="objLat" type="number" step="any" placeholder="Latitud GPS"></div><div><label>Longitud</label><input id="objLng" type="number" step="any" placeholder="Longitud GPS"></div></div>
 <label>Radio de activación (metros)</label><input id="objRadius" type="number" min="5" max="500" value="35">
 <label>Modelo 3D (.glb / .gltf) URL (opcional)</label><input id="objModel" type="url" placeholder="https://.../objeto.glb">
-<div class="actions"><button class="secondary" onclick="useCurrentPosition('objLat','objLng')">USAR MI GPS</button><button onclick="createObjective()">GUARDAR OBJETIVO + QR</button></div>
+<div class="actions"><button class="secondary" onclick="useCurrentPosition('objLat','objLng')">USAR MI GPS</button><button id="createObjectiveBtn" onclick="createObjective()">GUARDAR OBJETIVO + QR</button></div>
 <p id="objectiveMsg" class="status hidden"></p><div id="qrResult" class="hidden card"><b class="gold" id="qrTitle"></b><div id="qrBox"></div><p class="small">Imprime este QR y ubícalo en el objetivo. El código se muestra una sola vez.</p><button onclick="window.print()">IMPRIMIR QR</button></div>
 </div>
 <div class="panel">
@@ -166,17 +166,19 @@ async function selectGame(id){
 async function setGameStatus(status){
  if(!currentGame)return;const {error}=await db.from("games").update({status}).eq("id",currentGame.id);if(error){alert(error.message);return;}currentGame.status=status;$("gameState").textContent=status.toUpperCase();await loadGames();alert(status==="active"?"Operación iniciada.":"Operación finalizada.");
 }
+function updateObjectiveTypeUI(){const virtual=$("objectiveType").value==="virtual";$("createObjectiveBtn").textContent=virtual?"GUARDAR OBJETIVO VIRTUAL":"GUARDAR OBJETIVO + QR";}
 async function createObjective(){
  if(!currentGame)return;const name=$("objectiveName").value.trim();if(name.length<2){msg("objectiveMsg","Escribe un nombre para el objetivo.");return;}
  const lat=$("objLat").value.trim(),lng=$("objLng").value.trim(),radius=Math.max(5,Math.min(500,Number($("objRadius").value)||35));
  if((lat&&!lng)||(!lat&&lng)){msg("objectiveMsg","Debes ingresar latitud y longitud juntas.");return;}
+ const virtual=$("objectiveType").value==="virtual";if(virtual&&(!lat||!lng)){msg("objectiveMsg","Un objetivo virtual necesita coordenadas GPS.");return;}
  const raw=Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b=>b.toString(16).padStart(2,"0")).join("");
  const hash=await sha256(raw);
- const payload={game_id:currentGame.id,name,token_hash:hash,radius_m:radius,visual_description:$("objectiveDescription").value.trim()||null,ar_asset_url:$("objModel").value.trim()||null};
+ const payload={game_id:currentGame.id,name,objective_type:virtual?"virtual":"physical",token_hash:hash,radius_m:radius,visual_description:$("objectiveDescription").value.trim()||null,ar_asset_url:$("objModel").value.trim()||null};
  if(lat&&lng){payload.latitude=Number(lat);payload.longitude=Number(lng);}
  const {data,error}=await db.from("objectives").insert(payload).select().single();if(error){msg("objectiveMsg",error.message);return;}
- $("qrTitle").textContent=name;$("qrBox").innerHTML="";new QRCode($("qrBox"),{text:raw,width:190,height:190,correctLevel:QRCode.CorrectLevel.H});$("qrResult").classList.remove("hidden");msg("objectiveMsg","Objetivo guardado. Conserva e imprime este QR: no se puede volver a generar el mismo código.");
- $("objectiveName").value="";$("objectiveDescription").value="";$("objModel").value="";await selectGame(currentGame.id);
+ if(virtual){$("qrResult").classList.add("hidden");msg("objectiveMsg","Objetivo virtual guardado. Asígnalo a jugadores para capturarlo por GPS.");}else{$("qrTitle").textContent=name;$("qrBox").innerHTML="";new QRCode($("qrBox"),{text:raw,width:190,height:190,correctLevel:QRCode.CorrectLevel.H});$("qrResult").classList.remove("hidden");msg("objectiveMsg","Objetivo guardado. Conserva e imprime este QR: no se puede volver a generar el mismo código.");}
+ $("objectiveType").value="physical";updateObjectiveTypeUI();$("objectiveName").value="";$("objectiveDescription").value="";$("objModel").value="";await selectGame(currentGame.id);
 }
 async function sha256(v){const h=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v));return Array.from(new Uint8Array(h)).map(x=>x.toString(16).padStart(2,"0")).join("");}
 async function useCurrentPosition(latId,lngId){if(!navigator.geolocation){alert("Este navegador no ofrece GPS.");return;}navigator.geolocation.getCurrentPosition(p=>{$(latId).value=p.coords.latitude.toFixed(7);$(lngId).value=p.coords.longitude.toFixed(7);},e=>alert("No se pudo obtener la ubicación: "+e.message),{enableHighAccuracy:true,timeout:15000});}
@@ -240,8 +242,8 @@ async function loadPlayerGame(){
  const [g,t,a,o]=await Promise.all([
   db.from("games").select("*").eq("id",gp.game_id).single(),
   db.from("teams").select("*").eq("id",gp.team_id).single(),
-  db.from("objective_assignments").select("id,status,is_secret,sequence_order,unlocked_at,objectives(id,name,status,latitude,longitude,radius_m,visual_description,ar_asset_url)").eq("player_id",gp.id).not("unlocked_at","is",null).order("sequence_order"),
-  db.from("objectives").select("id,name,token_hash,status,latitude,longitude,radius_m,visual_description,ar_asset_url").eq("game_id",gp.game_id)
+  db.from("objective_assignments").select("id,status,is_secret,sequence_order,unlocked_at,objectives(id,name,status,latitude,longitude,radius_m,visual_description,ar_asset_url,objective_type)").eq("player_id",gp.id).not("unlocked_at","is",null).order("sequence_order"),
+  db.from("objectives").select("id,name,token_hash,status,latitude,longitude,radius_m,visual_description,ar_asset_url,objective_type").eq("game_id",gp.game_id)
  ]);
  if(g.error||t.error||a.error||o.error){$("playerGameInfo").textContent="No se pudo cargar la operación.";return;}
  currentGame=g.data;currentTeams=[t.data];currentPlayers=[gp];
@@ -255,7 +257,7 @@ function renderPlayerSnapshot(snap,offline){
  currentGame=g;currentTeams=[t];currentPlayers=[gp];
  $("playerGameInfo").innerHTML="<b>"+escapeHtml(g.name)+"</b><br>Indicativo: "+escapeHtml(gp.callsign)+" · Equipo: "+escapeHtml(t.name)+" <span class='tag "+t.color+"'>"+(colors[t.color]||t.color)+"</span><br>Estado: "+g.status;
  $("playerStatus").textContent=offline?"MODO SIN CONEXIÓN. Los escaneos quedarán pendientes y se sincronizarán al recuperar internet.":(g.status==="active"?"Operación en curso. Mantén tu ubicación compartida para apoyar al equipo.":"La operación no está activa.");
- $("myObjectives").innerHTML=assignments.length?assignments.map(x=>{const o=x.objectives||{};return '<div class="card"><div class="topline"><b>'+escapeHtml(o.name||"Misión")+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+(o.status==="captured"?"CAPTURADO":x.status.toUpperCase())+'</span></div>'+(x.is_secret?'<span class="tag yellow">MISIÓN SECRETA</span>':"")+'<p class="small">'+(o.latitude!=null?"GPS: "+Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+'</p>'+(o.visual_description?'<p>'+escapeHtml(o.visual_description)+'</p>':"")+(o.ar_asset_url?'<button class="secondary" onclick="showAR(\''+encodeURIComponent(o.ar_asset_url)+'\',\''+escapeHtml(o.name)+'\')">VER OBJETO 3D / RA</button>':"")+'</div>';}).join(""):"No tienes misiones asignadas todavía.";
+ $("myObjectives").innerHTML=assignments.length?assignments.map(x=>{const o=x.objectives||{};const virtual=o.objective_type==="virtual";return '<div class="card"><div class="topline"><b>'+escapeHtml(o.name||"Misión")+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+(o.status==="captured"?"CAPTURADO":x.status.toUpperCase())+'</span></div>'+(x.is_secret?'<span class="tag yellow">MISIÓN SECRETA</span>':"")+'<p class="small">'+(virtual?"OBJETIVO VIRTUAL GPS · ":"OBJETIVO FÍSICO QR · ")+(o.latitude!=null?"GPS: "+Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+'</p>'+(o.visual_description?'<p>'+escapeHtml(o.visual_description)+'</p>':"")+(o.ar_asset_url?'<button class="secondary" onclick="showAR(\''+encodeURIComponent(o.ar_asset_url)+'\',\''+escapeHtml(o.name)+'\')">VER OBJETO 3D / RA</button>':"")+(virtual&&o.status!=="captured"?'<button onclick="captureVirtualObjective(\''+o.id+'\')">CAPTURAR OBJETIVO VIRTUAL GPS</button>':"")+'</div>';}).join(""):"No tienes misiones asignadas todavía.";
  $("arArea").textContent="Los modelos 3D se abrirán aquí cuando una misión tenga un archivo GLB/GLTF configurado por el administrador.";
 }
 function showAR(url,name){const src=decodeURIComponent(url);$("arArea").innerHTML='<h3>'+escapeHtml(name)+'</h3><model-viewer src="'+escapeHtml(src)+'" ar ar-modes="webxr scene-viewer quick-look" camera-controls auto-rotate shadow-intensity="1" style="width:100%;height:360px;background:#111a10;border-radius:10px" alt="Modelo 3D del objetivo"></model-viewer><p class="small">Si el equipo es compatible, pulsa el icono AR del visor para colocar el objeto en el entorno real.</p>';if(!document.querySelector('script[data-modelviewer]')){const s=document.createElement("script");s.type="module";s.src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js";s.dataset.modelviewer="1";document.head.appendChild(s);}}
@@ -374,6 +376,20 @@ async function startScanner(){
  try{scanner=new Html5Qrcode("reader");await scanner.start({facingMode:"environment"},{fps:10,qrbox:{width:240,height:240}},async text=>{await stopScanner();await captureObjective(text);},()=>{});}catch(e){msg("captureMsg","No se pudo abrir la cámara. Revisa el permiso del navegador.");}
 }
 async function stopScanner(){if(scanner){try{if(scanner.isScanning)await scanner.stop();await scanner.clear();}catch{}scanner=null;}}
+async function captureVirtualObjective(id){
+ if(!currentGame||currentGame.status!=="active"){msg("captureMsg","La partida debe estar activa.");return;}
+ if(!navigator.onLine){msg("captureMsg","La captura virtual necesita conexión para validarse en el servidor.");return;}
+ if(!navigator.geolocation){msg("captureMsg","GPS no disponible.");return;}
+ msg("captureMsg","Verificando ubicación GPS y radio de captura...");
+ navigator.geolocation.getCurrentPosition(async p=>{
+  const payload={game_id:currentGame.id,user_id:currentUser.id,latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy_m:p.coords.accuracy,updated_at:new Date().toISOString()};
+  const {error:locError}=await db.from("player_locations").upsert(payload,{onConflict:"game_id,user_id"});
+  if(locError){msg("captureMsg","No se pudo verificar tu ubicación: "+locError.message);return;}
+  const {data,error}=await db.rpc("capture_virtual_objective",{p_objective_id:id});
+  if(error||!data?.success){msg("captureMsg","Captura rechazada: "+(error?.message||"Verifica la distancia y la misión asignada."));return;}
+  msg("captureMsg","¡OBJETIVO VIRTUAL CAPTURADO! "+data.objective+" · "+data.distance_m+" m del punto GPS.");await loadPlayerGame();
+ },e=>msg("captureMsg","No se pudo obtener GPS: "+e.message),{enableHighAccuracy:true,maximumAge:0,timeout:20000});
+}
 async function captureObjective(raw){
  const hash=await sha256(raw),known=JSON.parse(localStorage.getItem("anubis_tokens_"+(currentGame?.id||""))||"[]"),objective=known.find(x=>x.token_hash===hash);
  if(!objective){msg("captureMsg","QR no válido para esta operación.");return;}
