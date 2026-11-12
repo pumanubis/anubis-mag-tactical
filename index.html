@@ -168,7 +168,28 @@ async function setGameStatus(status){
 }
 const tacticalModels={crate:"models/crate.gltf",radio:"models/radio.gltf",backpack:"models/backpack.gltf",fuel:"models/fuel.gltf"};
 function selectLibraryObject(){const key=$("objLibrary").value;$("objModel").value=key?new URL(tacticalModels[key],location.href).href:"";$("libraryPreview").classList.add("hidden");}
-function previewLibraryObject(){const url=$("objModel").value.trim();if(!url){alert("Selecciona un objeto de la biblioteca o escribe un enlace 3D.");return;}const panel=$("libraryPreview");panel.classList.remove("hidden");panel.innerHTML='<model-viewer src="'+escapeHtml(url)+'" camera-controls auto-rotate shadow-intensity="1" style="width:100%;height:260px" alt="Vista previa del objeto 3D"></model-viewer>';if(!document.querySelector('script[data-modelviewer]')){const s=document.createElement("script");s.type="module";s.src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js";s.dataset.modelviewer="1";document.head.appendChild(s);}}
+async function previewLibraryObject(){
+ const url=$("objModel").value.trim(),panel=$("libraryPreview");
+ if(!url){alert("Selecciona un objeto de la biblioteca o escribe un enlace 3D.");return;}
+ panel.classList.remove("hidden");
+ panel.innerHTML='<div id="libraryPreviewStatus" class="small" style="padding:10px">Cargando visor 3D...</div><model-viewer id="libraryModelViewer" src="'+escapeHtml(url)+'" camera-controls auto-rotate shadow-intensity="1" exposure="1.3" camera-orbit="45deg 65deg auto" style="width:100%;height:220px;display:block;background:#273424;border-radius:10px" alt="Vista previa del objeto 3D"></model-viewer>';
+ const status=$("libraryPreviewStatus"),viewer=$("libraryModelViewer");
+ viewer.addEventListener("load",()=>{status.textContent="Modelo 3D cargado. Desliza el dedo para girarlo.";});
+ viewer.addEventListener("error",()=>{status.textContent="No se pudo cargar el modelo 3D. Comprueba tu conexión y vuelve a intentarlo.";});
+ try{await loadTacticalModelViewer();if(viewer.modelIsVisible){status.textContent="Modelo 3D cargado. Desliza el dedo para girarlo.";}else{status.textContent="Abriendo modelo 3D...";}}catch(e){status.textContent="Error al cargar visor 3D: "+e.message;}
+}
+let tacticalModelViewerPromise=null;
+function loadTacticalModelViewer(){
+ if(customElements.get("model-viewer"))return Promise.resolve();
+ if(tacticalModelViewerPromise)return tacticalModelViewerPromise;
+ tacticalModelViewerPromise=new Promise((resolve,reject)=>{
+  const s=document.createElement("script");s.type="module";s.src="https://cdn.jsdelivr.net/npm/@google/model-viewer@4.1.0/dist/model-viewer.min.js";s.dataset.modelviewer="1";
+  s.onload=()=>customElements.whenDefined("model-viewer").then(resolve,reject);
+  s.onerror=()=>reject(Error("No se pudo descargar el visor. Revisa la conexión a internet."));
+  document.head.appendChild(s);
+ });
+ return tacticalModelViewerPromise;
+}
 function updateObjectiveTypeUI(){const virtual=$("objectiveType").value==="virtual";$("createObjectiveBtn").textContent=virtual?"GUARDAR OBJETIVO VIRTUAL":"GUARDAR OBJETIVO + QR";}
 async function createObjective(){
  if(!currentGame)return;const name=$("objectiveName").value.trim();if(name.length<2){msg("objectiveMsg","Escribe un nombre para el objetivo.");return;}
@@ -263,7 +284,7 @@ function renderPlayerSnapshot(snap,offline){
  $("myObjectives").innerHTML=assignments.length?assignments.map(x=>{const o=x.objectives||{};const virtual=o.objective_type==="virtual";return '<div class="card"><div class="topline"><b>'+escapeHtml(o.name||"Misión")+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+(o.status==="captured"?"CAPTURADO":x.status.toUpperCase())+'</span></div>'+(x.is_secret?'<span class="tag yellow">MISIÓN SECRETA</span>':"")+'<p class="small">'+(virtual?"OBJETIVO VIRTUAL GPS · ":"OBJETIVO FÍSICO QR · ")+(o.latitude!=null?"GPS: "+Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+'</p>'+(o.visual_description?'<p>'+escapeHtml(o.visual_description)+'</p>':"")+(o.ar_asset_url?'<button class="secondary" onclick="showAR(\''+encodeURIComponent(o.ar_asset_url)+'\',\''+escapeHtml(o.name)+'\')">VER OBJETO 3D / RA</button>':"")+(virtual&&o.status!=="captured"?'<button onclick="captureVirtualObjective(\''+o.id+'\')">CAPTURAR OBJETIVO VIRTUAL GPS</button>':"")+'</div>';}).join(""):"No tienes misiones asignadas todavía.";
  $("arArea").textContent="Los modelos 3D se abrirán aquí cuando una misión tenga un archivo GLB/GLTF configurado por el administrador.";
 }
-function showAR(url,name){const src=decodeURIComponent(url);$("arArea").innerHTML='<h3>'+escapeHtml(name)+'</h3><model-viewer src="'+escapeHtml(src)+'" ar ar-modes="webxr scene-viewer quick-look" camera-controls auto-rotate shadow-intensity="1" style="width:100%;height:360px;background:#111a10;border-radius:10px" alt="Modelo 3D del objetivo"></model-viewer><p class="small">Si el equipo es compatible, pulsa el icono AR del visor para colocar el objeto en el entorno real.</p>';if(!document.querySelector('script[data-modelviewer]')){const s=document.createElement("script");s.type="module";s.src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js";s.dataset.modelviewer="1";document.head.appendChild(s);}}
+function showAR(url,name){const src=decodeURIComponent(url);$("arArea").innerHTML='<h3>'+escapeHtml(name)+'</h3><p id="arLoadStatus" class="small">Cargando visor 3D...</p><model-viewer id="arModelViewer" src="'+escapeHtml(src)+'" ar ar-modes="webxr scene-viewer quick-look" camera-controls auto-rotate shadow-intensity="1" style="width:100%;height:360px;background:#273424;border-radius:10px" alt="Modelo 3D del objetivo"></model-viewer><p class="small">Si el equipo es compatible, pulsa el icono AR del visor para colocar el objeto en el entorno real.</p>';const v=$("arModelViewer");v.addEventListener("load",()=>{$("arLoadStatus").textContent="Modelo cargado correctamente.";});v.addEventListener("error",()=>{$("arLoadStatus").textContent="No se pudo abrir el archivo 3D.";});loadTacticalModelViewer().catch(e=>{$("arLoadStatus").textContent=e.message;});}
 let myGps=null,gpsWatchId=null,gpsLastSync=0,gpsLastMapRefresh=0,gpsLiveMarker=null,gpsLiveLine=null,gpsObjectives=[],gpsLiveBusy=false,gpsPollTimer=null,gpsPollBusy=false,gpsLastFixAt=0,gpsLastAccuracy=null;
 let tacticalSatellite=false,tacticalTileLayer=null,deviceHeading=null,compassEnabled=false,compassHandler=null,lastGpsPoint=null;
 function setTacticalMapLayer(satellite){tacticalSatellite=satellite;if(!mapPlayer||!window.L)return;if(tacticalTileLayer)mapPlayer.removeLayer(tacticalTileLayer);tacticalTileLayer=L.tileLayer(satellite?"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}":"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:satellite?"Imagery © Esri, Maxar, Earthstar Geographics":"© OpenStreetMap",maxZoom:19}).addTo(mapPlayer);tacticalTileLayer.bringToBack();}
