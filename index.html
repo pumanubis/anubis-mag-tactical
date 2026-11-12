@@ -237,7 +237,16 @@ async function assignObjectives(){
 async function loadAssignedMissions(){
  const {data,error}=await db.from("objective_assignments").select("id,player_id,objective_id,status,is_secret,unlocked_at").eq("game_id",currentGame.id).order("assigned_at",{ascending:false});
  if(error){$("assignedMissions").textContent=error.message;return;}
- $("assignedMissions").innerHTML=data.length?'<h3>Misiones asignadas / desbloqueo</h3>'+data.map(a=>{const p=currentPlayers.find(x=>x.id===a.player_id),o=currentObjectives.find(x=>x.id===a.objective_id);return '<div class="card"><b>'+escapeHtml(p?.callsign||"Jugador")+'</b> · '+escapeHtml(o?.name||"Objetivo")+'<div class="small">'+(a.is_secret?"SECRETA":"NORMAL")+' · '+(a.unlocked_at?"DESBLOQUEADA":"BLOQUEADA")+'</div>'+(a.unlocked_at?"":'<button class="secondary" onclick="unlockAssignment(\''+a.id+'\')">DESBLOQUEAR</button>')+'</div>';}).join(""):"<p class='small'>Aún no hay misiones asignadas.</p>";
+ $("assignedMissions").innerHTML=data.length?'<h3>Misiones asignadas / desbloqueo</h3>'+data.map(a=>{const p=currentPlayers.find(x=>x.id===a.player_id),o=currentObjectives.find(x=>x.id===a.objective_id);return '<div class="card"><b>'+escapeHtml(p?.callsign||"Jugador")+'</b> · '+escapeHtml(o?.name||"Objetivo")+'<div class="small">'+(a.is_secret?"SECRETA":"NORMAL")+' · '+(a.unlocked_at?"DESBLOQUEADA":"BLOQUEADA")+'</div>'+(a.unlocked_at?"":'<button class="secondary" onclick="unlockAssignment(\''+a.id+'\')">DESBLOQUEAR</button>')+' <button class="secondary" onclick="removeAssignment(\''+a.id+'\')">QUITAR MISIÓN AL JUGADOR</button></div>';}).join(""):"<p class='small'>Aún no hay misiones asignadas.</p>";
+}
+async function removeAssignment(id){
+ if(!currentGame||!navigator.onLine){alert("Selecciona una partida y conéctate a internet.");return;}
+ if(!confirm("¿Quitar esta misión del jugador? El objetivo y su historial de capturas se conservarán."))return;
+ const {data,error}=await db.from("objective_assignments").delete().eq("id",id).eq("game_id",currentGame.id).select("id");
+ if(error){alert("No se pudo retirar la misión: "+error.message);return;}
+ if(!data?.length){alert("No se retiró la misión. Comprueba los permisos de administrador.");return;}
+ await loadAssignedMissions();
+ alert("Misión retirada. El objetivo original y las capturas históricas permanecen guardados.");
 }
 async function unlockAssignment(id){
  const {error}=await db.from("objective_assignments").update({unlocked_at:new Date().toISOString()}).eq("id",id);
