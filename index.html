@@ -166,7 +166,7 @@ async function selectGame(id){
 async function setGameStatus(status){
  if(!currentGame)return;const {error}=await db.from("games").update({status}).eq("id",currentGame.id);if(error){alert(error.message);return;}currentGame.status=status;$("gameState").textContent=status.toUpperCase();await loadGames();alert(status==="active"?"Operación iniciada.":"Operación finalizada.");
 }
-const tacticalModels={crate:"models/crate.gltf?v=30",radio:"models/radio.gltf",backpack:"models/backpack.gltf",fuel:"models/fuel.gltf"};
+const tacticalModels={crate:"models/crate.gltf?v=31",radio:"models/radio.gltf",backpack:"models/backpack.gltf",fuel:"models/fuel.gltf"};
 function selectLibraryObject(){const key=$("objLibrary").value;$("objModel").value=key?new URL(tacticalModels[key],location.href).href:"";$("libraryPreview").classList.add("hidden");}
 async function previewLibraryObject(){
  const url=$("objModel").value.trim(),panel=$("libraryPreview");
@@ -333,6 +333,9 @@ function renderPlayerSnapshot(snap,offline){
 }
 let tacticalCameraStream=null;
 async function showAR(url,name,objectiveId){
+ // Los objetivos creados antes de V30 conservan la URL antigua en Supabase.
+ // Actualizar únicamente el modelo de biblioteca sin modificar la misión ni el GPS.
+ try{const oldUrl=new URL(decodeURIComponent(url),location.href);if(/\/models\/crate\.gltf$/i.test(oldUrl.pathname)){oldUrl.searchParams.set("v","31");url=encodeURIComponent(oldUrl.href);}}catch(e){}
  stopTacticalCamera();
  const snap=JSON.parse(localStorage.getItem("anubis_player_"+(currentUser?.id||""))||"null");
  const assigned=snap?.assignments?.find(x=>x.objectives?.id===objectiveId);
@@ -362,7 +365,7 @@ async function showAR(url,name,objectiveId){
    return;
   }
   $("arLoadStatus").textContent="Dentro de la zona asignada: "+distance+" m del punto (precisión GPS ±"+accuracy+" m). El GPS confirma la zona, no la posición exacta del objeto en la imagen. "+modeMessage;
-  $("arSearchContent").innerHTML='<div id="tacticalCameraStage" style="position:relative;height:380px;background:#273424;border-radius:12px;overflow:hidden"><video id="tacticalCameraVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:2"></video><model-viewer id="arModelViewer" src="'+escapeHtml(decodeURIComponent(url))+'" camera-controls shadow-intensity="1" exposure="1.5" environment-image="neutral" camera-orbit="25deg 70deg 230%" field-of-view="30deg" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:transparent" alt="Modelo 3D del objetivo"></model-viewer></div><p class="small">VISTA DE RESPALDO GPS: modelo superpuesto sin recuadro, no anclado al terreno. La posición exacta en cámara requiere tecnología geoespacial compatible, todavía no disponible en esta versión.</p><button onclick="launchTacticalAR()">📷 VER REFERENCIA EN CÁMARA</button><button onclick="captureVirtualObjective(\''+objectiveId+'\')">🎯 SOLICITAR CAPTURA GPS</button><button class="secondary" onclick="stopTacticalCamera()">CERRAR CÁMARA</button>';
+  $("arSearchContent").innerHTML='<div id="tacticalCameraStage" style="position:relative;height:380px;background:#273424;border-radius:12px;overflow:hidden"><video id="tacticalCameraVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:2"></video><model-viewer id="arModelViewer" src="'+escapeHtml(decodeURIComponent(url))+'" camera-controls shadow-intensity="1" exposure="1.5" environment-image="neutral" camera-orbit="30deg 68deg 350%" field-of-view="30deg" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:transparent" alt="Modelo 3D del objetivo"></model-viewer></div><p class="small">VISTA DE RESPALDO GPS: modelo superpuesto sin recuadro, no anclado al terreno. La posición exacta en cámara requiere tecnología geoespacial compatible, todavía no disponible en esta versión.</p><button onclick="launchTacticalAR()">📷 VER REFERENCIA EN CÁMARA</button><button onclick="captureVirtualObjective(\''+objectiveId+'\')">🎯 SOLICITAR CAPTURA GPS</button><button class="secondary" onclick="stopTacticalCamera()">CERRAR CÁMARA</button>';
   loadTacticalModelViewer().catch(e=>{$("arLoadStatus").textContent="No se pudo cargar el visor: "+e.message;});
  },e=>{$("arLoadStatus").textContent="No se pudo comprobar tu ubicación: "+e.message;},{enableHighAccuracy:true,maximumAge:0,timeout:20000});
 }
