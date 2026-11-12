@@ -301,7 +301,7 @@ let tacticalCameraStream=null;
 function showAR(url,name){
  stopTacticalCamera();
  const src=decodeURIComponent(url);
- $("arArea").innerHTML='<h3>'+escapeHtml(name)+'</h3><p id="arLoadStatus" class="small">Preparando objeto 3D...</p><div id="tacticalCameraStage" style="position:relative;height:380px;background:#273424;border-radius:12px;overflow:hidden"><video id="tacticalCameraVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none"></video><model-viewer id="arModelViewer" src="'+escapeHtml(src)+'" ar ar-modes="webxr scene-viewer quick-look" ar-placement="floor" camera-controls shadow-intensity="1" exposure="1.5" style="position:absolute;inset:0;width:100%;height:100%;background:transparent" alt="Modelo 3D del objetivo"></model-viewer></div><button id="launchARButton" onclick="launchTacticalAR()">📷 MOSTRAR OBJETO EN MI CÁMARA</button><button class="secondary" onclick="launchNativeTacticalAR()">PROBAR RA ANCLADA AL SUELO (SI ES COMPATIBLE)</button><button class="secondary" onclick="stopTacticalCamera()">CERRAR CÁMARA</button><p class="small">La primera opción superpone el objeto 3D sobre la cámara y permite girarlo con el dedo; no queda anclado físicamente al suelo. La segunda usa RA espacial cuando el teléfono la admite.</p>';
+ $("arArea").innerHTML='<h3>'+escapeHtml(name)+'</h3><p id="arLoadStatus" class="small">Preparando objeto 3D...</p><div id="tacticalCameraStage" style="position:relative;height:380px;background:#273424;border-radius:12px;overflow:hidden"><video id="tacticalCameraVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:2"></video><model-viewer id="arModelViewer" src="'+escapeHtml(src)+'" ar ar-modes="webxr scene-viewer quick-look" ar-placement="floor" camera-controls shadow-intensity="1" exposure="1.5" style="position:absolute;inset:0;width:100%;height:100%;background:#273424;z-index:1" alt="Modelo 3D del objetivo"></model-viewer></div><button id="launchARButton" onclick="launchTacticalAR()">📷 MOSTRAR OBJETO EN MI CÁMARA</button><button class="secondary" onclick="launchNativeTacticalAR()">PROBAR RA ANCLADA AL SUELO (SI ES COMPATIBLE)</button><button class="secondary" onclick="stopTacticalCamera()">CERRAR CÁMARA</button><p class="small">La primera opción muestra la cámara y un recuadro 3D que puedes girar; no coloca el objeto sobre el suelo. La segunda usa RA espacial cuando el teléfono la admite.</p>';
  const viewer=$("arModelViewer");
  viewer.addEventListener("load",()=>{$("arLoadStatus").textContent="Objeto 3D listo. Pulsa MOSTRAR OBJETO EN MI CÁMARA.";});
  viewer.addEventListener("error",()=>{$("arLoadStatus").textContent="No se pudo cargar el objeto 3D. Revisa tu conexión.";});
@@ -317,13 +317,13 @@ async function launchTacticalAR(){
   stopTacticalCamera();
   status.textContent="Solicitando permiso de cámara...";
   tacticalCameraStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}}});
-  video.srcObject=tacticalCameraStream;video.style.display="block";await video.play();
-  status.textContent="Cámara activa: el objeto 3D se muestra superpuesto. Desliza para girarlo.";
+  video.srcObject=tacticalCameraStream;video.style.display="block";await video.play(); const viewer=$("arModelViewer");if(viewer){viewer.style.cssText="position:absolute;right:8px;bottom:8px;width:42%;height:46%;z-index:3;background:#273424;border:2px solid #d5bd68;border-radius:10px";}
+  status.textContent="Cámara activa. El objeto 3D aparece en el recuadro inferior; puedes girarlo con el dedo. Esta es una vista combinada, no RA espacial.";
  }catch(e){status.textContent="No se pudo activar la cámara: "+e.message+". Revisa el permiso de cámara en Chrome.";stopTacticalCamera();}
 }
 function stopTacticalCamera(){
  if(tacticalCameraStream){tacticalCameraStream.getTracks().forEach(t=>t.stop());tacticalCameraStream=null;}
- const video=$("tacticalCameraVideo");if(video){video.pause();video.srcObject=null;video.style.display="none";}
+ const video=$("tacticalCameraVideo");if(video){video.pause();video.srcObject=null;video.style.display="none";}const viewer=$("arModelViewer");if(viewer){viewer.style.cssText="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:#273424";}
 }
 function launchNativeTacticalAR(){
  const viewer=$("arModelViewer");if(!viewer)return;
