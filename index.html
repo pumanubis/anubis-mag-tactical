@@ -250,7 +250,7 @@ function renderPlayerSnapshot(snap,offline){
  $("arArea").textContent="Los modelos 3D se abrirán aquí cuando una misión tenga un archivo GLB/GLTF configurado por el administrador.";
 }
 function showAR(url,name){const src=decodeURIComponent(url);$("arArea").innerHTML='<h3>'+escapeHtml(name)+'</h3><model-viewer src="'+escapeHtml(src)+'" ar ar-modes="webxr scene-viewer quick-look" camera-controls auto-rotate shadow-intensity="1" style="width:100%;height:360px;background:#111a10;border-radius:10px" alt="Modelo 3D del objetivo"></model-viewer><p class="small">Si el equipo es compatible, pulsa el icono AR del visor para colocar el objeto en el entorno real.</p>';if(!document.querySelector('script[data-modelviewer]')){const s=document.createElement("script");s.type="module";s.src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js";s.dataset.modelviewer="1";document.head.appendChild(s);}}
-let myGps=null,gpsWatchId=null,gpsLastSync=0,gpsLastMapRefresh=0,gpsLiveMarker=null,gpsLiveLine=null,gpsObjectives=[],gpsLiveBusy=false;
+let myGps=null,gpsWatchId=null,gpsLastSync=0,gpsLastMapRefresh=0,gpsLiveMarker=null,gpsLiveLine=null,gpsObjectives=[],gpsLiveBusy=false,gpsPollTimer=null,gpsPollBusy=false,gpsLastFixAt=0,gpsLastAccuracy=null;
 function metersBetween(a,b){const rad=Math.PI/180,dlat=(b[0]-a[0])*rad,dlon=(b[1]-a[1])*rad,h=Math.sin(dlat/2)**2+Math.cos(a[0]*rad)*Math.cos(b[0]*rad)*Math.sin(dlon/2)**2;return 12742000*Math.asin(Math.min(1,Math.sqrt(h)));}
 function updateGpsNavigation(objectives){
  const box=$("gpsNavigation");if(!box)return;
@@ -259,41 +259,42 @@ function updateGpsNavigation(objectives){
  if(!valid.length){box.textContent="Tu ubicación GPS está activa. No hay objetivos con coordenadas disponibles.";return;}
  const nearest=valid.map(x=>({...x,distance:metersBetween(myGps,[Number(x.latitude),Number(x.longitude)])})).sort((a,b)=>a.distance-b.distance)[0];
  const distance=nearest.distance>=1000?(nearest.distance/1000).toFixed(2)+" km":Math.round(nearest.distance)+" m";
- box.textContent="Tu ubicación GPS activa · Objetivo más cercano: "+nearest.name+" · Distancia en línea recta: "+distance+". La línea del mapa no representa un camino transitable.";
+ box.textContent="Tu ubicación GPS activa · Objetivo más cercano: "+nearest.name+" · Distancia en línea recta: "+distance+". Precisión GPS aproximada: "+(gpsLastAccuracy==null?"desconocida":Math.round(gpsLastAccuracy)+" m")+". Última lectura: "+(gpsLastFixAt?new Date(gpsLastFixAt).toLocaleTimeString("es-CO"):"sin datos")+". La línea del mapa no representa un camino transitable.";
  const link=$("gpsDirections");link.style.display="inline-block";link.href="https://www.google.com/maps/dir/?api=1&origin="+myGps.join(",")+"&destination="+Number(nearest.latitude)+","+Number(nearest.longitude)+"&travelmode=walking";link.classList.remove("hidden");
 }
 function stopLiveGps(){
+ if(gpsPollTimer!==null){clearInterval(gpsPollTimer);gpsPollTimer=null;}gpsPollBusy=false;
  if(gpsWatchId!==null&&navigator.geolocation)navigator.geolocation.clearWatch(gpsWatchId);
  gpsWatchId=null;const btn=$("gpsLiveBtn");if(btn)btn.textContent="INICIAR GPS EN VIVO";
+}
+function pollLiveGps(){
+ if(gpsWatchId===null||gpsPollBusy||!navigator.geolocation||document.hidden)return;
+ gpsPollBusy=true;
+ navigator.geolocation.getCurrentPosition(p=>{gpsPollBusy=false;applyLiveGpsFix(p);},()=>{gpsPollBusy=false;},{enableHighAccuracy:true,maximumAge:0,timeout:6500});
+}
+async function applyLiveGpsFix(p){
+ if(!currentGame||!currentUser)return;
+ const stamp=p.timestamp||Date.now();if(stamp<gpsLastFixAt)return;gpsLastFixAt=stamp;gpsLastAccuracy=p.coords.accuracy;
+ myGps=[p.coords.latitude,p.coords.longitude];
+ const liveBtn=$("gpsLiveBtn");if(liveBtn)liveBtn.textContent="DETENER GPS EN VIVO";
+ updateGpsNavigation(gpsObjectives);
+ if(mapPlayer){
+  if(!gpsLiveMarker)gpsLiveMarker=L.circleMarker(myGps,{radius:11,color:"#ffffff",weight:3,fillColor:"#1878f3",fillOpacity:1}).addTo(mapPlayer).bindPopup("Mi ubicación GPS en vivo");else gpsLiveMarker.setLatLng(myGps);
+  const near=gpsObjectives.filter(x=>x.latitude!=null&&x.longitude!=null).map(x=>({p:[Number(x.latitude),Number(x.longitude)],d:metersBetween(myGps,[Number(x.latitude),Number(x.longitude)])})).sort((a,b)=>a.d-b.d)[0];
+  if(gpsLiveLine){mapPlayer.removeLayer(gpsLiveLine);gpsLiveLine=null;}if(near)gpsLiveLine=L.polyline([myGps,near.p],{color:"#f1ca52",weight:3,dashArray:"7,7"}).addTo(mapPlayer);
+  if(!mapPlayer.getBounds().pad(-0.18).contains(myGps))mapPlayer.panTo(myGps);
+ }
+ const now=Date.now();
+ if(now-gpsLastSync>=5000&&!gpsLiveBusy){gpsLastSync=now;gpsLiveBusy=true;const payload={game_id:currentGame.id,user_id:currentUser.id,latitude:myGps[0],longitude:myGps[1],accuracy_m:p.coords.accuracy,updated_at:new Date().toISOString()};try{if(navigator.onLine){const {error}=await db.from("player_locations").upsert(payload,{onConflict:"game_id,user_id"});if(error)msg("playerStatus","GPS activo; no se pudo compartir: "+error.message);else msg("playerStatus","GPS en vivo · Precisión aproximada: "+Math.round(p.coords.accuracy)+" m.");}else{localStorage.setItem("anubis_location_queue",JSON.stringify(payload));msg("playerStatus","GPS activo sin conexión; posición pendiente de sincronizar.");}}catch(e){msg("playerStatus","Error al sincronizar GPS: "+e.message);}finally{gpsLiveBusy=false;}}
+ if(now-gpsLastMapRefresh>=15000){gpsLastMapRefresh=now;loadPlayerMap(false).catch(()=>{});}
 }
 function toggleLiveGps(){
  if(gpsWatchId!==null){stopLiveGps();msg("playerStatus","Seguimiento GPS detenido.");return;}
  if(!currentGame||!currentUser||!navigator.geolocation){msg("playerStatus","GPS no disponible o sesión no iniciada.");return;}
  msg("playerStatus","Solicitando permiso para seguimiento GPS en vivo...");
- gpsWatchId=navigator.geolocation.watchPosition(async p=>{
-  if(!currentGame||!currentUser){stopLiveGps();return;}
-  myGps=[p.coords.latitude,p.coords.longitude];
-  $("gpsLiveBtn").textContent="DETENER GPS EN VIVO";
-  updateGpsNavigation(gpsObjectives);
-  if(mapPlayer){
-   if(!gpsLiveMarker)gpsLiveMarker=L.circleMarker(myGps,{radius:11,color:"#ffffff",weight:3,fillColor:"#1878f3",fillOpacity:1}).addTo(mapPlayer).bindPopup("Mi ubicación GPS en vivo");
-   else gpsLiveMarker.setLatLng(myGps);
-   const near=gpsObjectives.filter(x=>x.latitude!=null&&x.longitude!=null).map(x=>({p:[Number(x.latitude),Number(x.longitude)],d:metersBetween(myGps,[Number(x.latitude),Number(x.longitude)])})).sort((a,b)=>a.d-b.d)[0];
-   if(gpsLiveLine){mapPlayer.removeLayer(gpsLiveLine);gpsLiveLine=null;}
-   if(near)gpsLiveLine=L.polyline([myGps,near.p],{color:"#f1ca52",weight:3,dashArray:"7,7"}).addTo(mapPlayer);
-   if(!mapPlayer.getBounds().pad(-0.18).contains(myGps))mapPlayer.panTo(myGps);
-  }
-  const now=Date.now();
-  if(now-gpsLastSync>=10000&&!gpsLiveBusy){
-   gpsLastSync=now;gpsLiveBusy=true;
-   const payload={game_id:currentGame.id,user_id:currentUser.id,latitude:myGps[0],longitude:myGps[1],accuracy_m:p.coords.accuracy,updated_at:new Date().toISOString()};
-   try{
-    if(navigator.onLine){const {error}=await db.from("player_locations").upsert(payload,{onConflict:"game_id,user_id"});if(error)msg("playerStatus","GPS activo localmente; no se pudo compartir: "+error.message);else msg("playerStatus","GPS en vivo · Precisión aproximada: "+Math.round(p.coords.accuracy)+" m.");}
-    else{localStorage.setItem("anubis_location_queue",JSON.stringify(payload));msg("playerStatus","GPS en vivo sin conexión; última posición pendiente de sincronizar.");}
-   }catch(e){msg("playerStatus","GPS activo, pero falló la sincronización: "+e.message);}finally{gpsLiveBusy=false;}
-  }
-  if(now-gpsLastMapRefresh>=15000){gpsLastMapRefresh=now;loadPlayerMap(false).catch(()=>{});}
- },e=>{msg("playerStatus","Seguimiento GPS interrumpido: "+e.message);stopLiveGps();},{enableHighAccuracy:true,maximumAge:2000,timeout:20000});
+ gpsWatchId=navigator.geolocation.watchPosition(p=>{applyLiveGpsFix(p).catch(()=>{});},e=>{msg("playerStatus","Seguimiento GPS interrumpido: "+e.message);stopLiveGps();},{enableHighAccuracy:true,maximumAge:0,timeout:12000});
+ gpsPollTimer=setInterval(pollLiveGps,3000);
+ pollLiveGps();
 }
 async function shareLocation(){
  if(!currentGame||!navigator.geolocation){msg("playerStatus","GPS no disponible.");return;}
