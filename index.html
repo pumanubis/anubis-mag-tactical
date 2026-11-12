@@ -166,7 +166,7 @@ async function selectGame(id){
 async function setGameStatus(status){
  if(!currentGame)return;const {error}=await db.from("games").update({status}).eq("id",currentGame.id);if(error){alert(error.message);return;}currentGame.status=status;$("gameState").textContent=status.toUpperCase();await loadGames();alert(status==="active"?"Operación iniciada.":"Operación finalizada.");
 }
-const tacticalModels={crate:"models/crate.gltf?v=31",radio:"models/radio.gltf",backpack:"models/backpack.gltf",fuel:"models/fuel.gltf"};
+const tacticalModels={crate:"https://cdn.3dassets.dev/assets/19896/v1/model.glb",radio:"models/radio.gltf",backpack:"models/backpack.gltf",fuel:"models/fuel.gltf"};
 function selectLibraryObject(){const key=$("objLibrary").value;$("objModel").value=key?new URL(tacticalModels[key],location.href).href:"";$("libraryPreview").classList.add("hidden");}
 async function previewLibraryObject(){
  const url=$("objModel").value.trim(),panel=$("libraryPreview");
@@ -333,9 +333,8 @@ function renderPlayerSnapshot(snap,offline){
 }
 let tacticalCameraStream=null;
 async function showAR(url,name,objectiveId){
- // Los objetivos creados antes de V30 conservan la URL antigua en Supabase.
- // Actualizar únicamente el modelo de biblioteca sin modificar la misión ni el GPS.
- try{const oldUrl=new URL(decodeURIComponent(url),location.href);if(/\/models\/crate\.gltf$/i.test(oldUrl.pathname)){oldUrl.searchParams.set("v","31");url=encodeURIComponent(oldUrl.href);}}catch(e){}
+ // Modelo alternativo CC0 con materiales PBR para las cajas ya asignadas.
+ try{const oldUrl=new URL(decodeURIComponent(url),location.href);if(/\/models\/crate\.gltf$/i.test(oldUrl.pathname)){url=encodeURIComponent("https://cdn.3dassets.dev/assets/19896/v1/model.glb");}}catch(e){}
  stopTacticalCamera();
  const snap=JSON.parse(localStorage.getItem("anubis_player_"+(currentUser?.id||""))||"null");
  const assigned=snap?.assignments?.find(x=>x.objectives?.id===objectiveId);
