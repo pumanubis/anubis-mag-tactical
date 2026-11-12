@@ -84,7 +84,7 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 </div>
 <div class="cols">
 <div class="panel"><h2>ASIGNAR OBJETIVOS</h2><label>Jugador</label><select id="assignPlayer"></select><label>Objetivos</label><div id="assignObjectives" class="muted"></div><label><input id="assignSecret" type="checkbox" style="width:auto"> Marcar como misión secreta</label><button onclick="assignObjectives()">ASIGNAR MISIONES</button><p id="assignMsg" class="status hidden"></p><div id="assignedMissions"></div></div>
-<div class="panel"><h2>MAPA DE OPERACIONES</h2><div class="actions"><button class="secondary" onclick="setAdminSatellite(false)">MAPA NORMAL</button><button onclick="setAdminSatellite(true)">SATÉLITE</button></div><div id="adminMap"></div><p class="small">Los marcadores representan objetivos con coordenadas GPS. Para reubicar uno, pulsa EDITAR UBICACIÓN y después toca el nuevo punto en el mapa.</p></div>
+<div class="panel"><h2>MAPA DE OPERACIONES</h2><div class="actions"><button class="secondary" onclick="setAdminSatellite(false)">MAPA NORMAL</button><button onclick="setAdminSatellite(true)">SATÉLITE</button></div><div id="adminMap"></div><p class="small">Los marcadores representan objetivos con coordenadas GPS. Desde el computador, arrastra un marcador hasta el lugar deseado. Después confirma con GUARDAR NUEVA UBICACIÓN. También puedes hacer clic en un marcador para editarlo.</p></div>
 </div>
 <div class="panel"><h2>OBJETIVOS CREADOS</h2><div id="objectivesList"></div><div id="editObjectivePanel" class="card hidden"><h2>EDITAR UBICACIÓN DEL OBJETIVO</h2><p id="editObjectiveName" class="gold"></p><p class="small">Escribe coordenadas o toca un punto del mapa de operaciones. El QR y las asignaciones se conservarán.</p><div class="row"><div><label>Latitud</label><input id="editObjLat" type="number" step="any"></div><div><label>Longitud</label><input id="editObjLng" type="number" step="any"></div></div><div class="actions"><button class="secondary" onclick="useCurrentPosition('editObjLat','editObjLng')">USAR MI GPS</button><button onclick="saveObjectiveLocation()">GUARDAR NUEVA UBICACIÓN</button><button class="secondary" onclick="cancelObjectiveLocation()">CANCELAR</button></div><p id="editObjectiveStatus" class="small"></p></div></div>
 </div>
@@ -265,7 +265,23 @@ function renderAdminMap(){
  if(!window.L)return;const pts=currentObjectives.filter(o=>o.latitude!=null&&o.longitude!=null);
  if(!mapAdmin){mapAdmin=L.map("adminMap").setView(pts.length?[pts[0].latitude,pts[0].longitude]:[4.65,-74.1],pts.length?14:5);mapAdmin.on("click",e=>{if(!editingObjectiveId)return;$("editObjLat").value=e.latlng.lat.toFixed(7);$("editObjLng").value=e.latlng.lng.toFixed(7);$("editObjectiveStatus").textContent="Punto seleccionado. Pulsa GUARDAR NUEVA UBICACIÓN para confirmar.";updateAdminEditMarker();});setAdminSatellite(adminSatellite);}
  else{mapAdmin.eachLayer(l=>{if(l instanceof L.Marker||l instanceof L.Circle||l instanceof L.CircleMarker)mapAdmin.removeLayer(l);});adminEditMarker=null;}
- pts.forEach(o=>{L.marker([o.latitude,o.longitude]).addTo(mapAdmin).bindPopup(escapeHtml(o.name));L.circle([o.latitude,o.longitude],{radius:o.radius_m,color:"#d5bd68"}).addTo(mapAdmin);});updateAdminEditMarker();setTimeout(()=>mapAdmin.invalidateSize(),200);
+ pts.forEach(o=>{
+  const marker=L.marker([o.latitude,o.longitude],{draggable:o.status!=="captured",autoPan:true}).addTo(mapAdmin);
+  marker.bindTooltip(escapeHtml(o.name),{direction:"top"});
+  marker.bindPopup('<b>'+escapeHtml(o.name)+'</b><br>Radio: '+Number(o.radius_m||0)+' m'+(o.status==="captured"?"<br>Ya capturado":"<br>Arrastra para cambiar la posición"));
+  marker.on("click",()=>{if(o.status!=="captured")editObjectiveLocation(o.id);});
+  marker.on("dragstart",()=>{if(editingObjectiveId&&editingObjectiveId!==o.id)cancelObjectiveLocation();});
+  marker.on("dragend",()=>{
+   const pos=marker.getLatLng();
+   editObjectiveLocation(o.id);
+   $("editObjLat").value=pos.lat.toFixed(7);
+   $("editObjLng").value=pos.lng.toFixed(7);
+   $("editObjectiveStatus").textContent="Nueva ubicación preparada desde el mapa. Pulsa GUARDAR NUEVA UBICACIÓN para confirmarla.";
+   updateAdminEditMarker();
+   mapAdmin.panTo(pos);
+  });
+  L.circle([o.latitude,o.longitude],{radius:Number(o.radius_m)||35,color:o.objective_type==="virtual"?"#d5bd68":"#71864a",interactive:false}).addTo(mapAdmin);
+ });updateAdminEditMarker();setTimeout(()=>mapAdmin.invalidateSize(),200);
 }
 async function loadPlayerGame(){
  if(!navigator.onLine){
