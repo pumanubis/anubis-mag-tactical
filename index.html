@@ -157,7 +157,7 @@ async function selectGame(id){
  $("playerTeam").innerHTML=currentTeams.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join("");
  $("assignPlayer").innerHTML=currentPlayers.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.callsign)+'</option>').join("");
  $("playersList").innerHTML=currentPlayers.length?currentPlayers.map(p=>'<div class="card"><b>'+escapeHtml(p.callsign)+'</b><div class="small">'+(currentTeams.find(t=>t.id===p.team_id)?.name||"Equipo")+' · '+p.status+'</div></div>').join(""):"No hay jugadores registrados.";
- $("objectivesList").innerHTML=currentObjectives.length?currentObjectives.map(o=>'<div class="card"><div class="topline"><b>'+escapeHtml(o.name)+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+o.status+'</span></div><div class="small">'+(o.latitude!=null?Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+' · radio '+o.radius_m+' m</div><button class="secondary" onclick="editObjectiveLocation(\''+o.id+'\')">EDITAR UBICACIÓN</button></div>').join(""):"No hay objetivos registrados.";
+ $("objectivesList").innerHTML=currentObjectives.length?currentObjectives.map(o=>'<div class="card"><div class="topline"><b>'+escapeHtml(o.name)+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+o.status+'</span></div><div class="small">'+(o.latitude!=null?Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+' · radio '+o.radius_m+' m</div><button class="secondary" onclick="editObjectiveLocation(\''+o.id+'\')">EDITAR UBICACIÓN</button> <button class="secondary" onclick="deleteObjective(\''+o.id+'\')">ELIMINAR OBJETIVO</button></div>').join(""):"No hay objetivos registrados.";
  if(editingObjectiveId){const edited=currentObjectives.find(o=>o.id===editingObjectiveId);if(!edited)cancelObjectiveLocation();else $("editObjectiveName").textContent=edited.name;}
 
  $("assignObjectives").innerHTML=currentObjectives.map(o=>'<label><input type="checkbox" value="'+o.id+'" style="width:auto"> '+escapeHtml(o.name)+'</label>').join("")||"Primero crea objetivos.";
@@ -244,6 +244,19 @@ async function unlockAssignment(id){
  if(error){alert(error.message);return;}await loadAssignedMissions();alert("Misión desbloqueada para el jugador.");
 }
 function setAdminSatellite(satellite){adminSatellite=satellite;if(!mapAdmin)return;if(adminTileLayer)mapAdmin.removeLayer(adminTileLayer);adminTileLayer=L.tileLayer(satellite?"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}":"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:satellite?"Imagery © Esri":"© OpenStreetMap",maxZoom:19}).addTo(mapAdmin);adminTileLayer.bringToBack();}
+async function deleteObjective(id){
+ if(!currentGame)return;
+ const obj=currentObjectives.find(o=>o.id===id);if(!obj)return;
+ if(obj.status==="captured"){alert("Este objetivo ya fue capturado. No se puede eliminar porque tiene historial de captura. Puedes conservarlo para el registro de la partida.");return;}
+ if(!navigator.onLine){alert("Conéctate a internet para eliminar objetivos.");return;}
+ if(!confirm('¿Eliminar definitivamente el objetivo "'+obj.name+'"? También desaparecerán sus asignaciones. Esta acción no se puede deshacer.'))return;
+ const {data,error}=await db.from("objectives").delete().eq("id",id).eq("game_id",currentGame.id).select("id");
+ if(error){alert("No se pudo eliminar: "+error.message);return;}
+ if(!data?.length){alert("No se eliminó el objetivo. Verifica tus permisos de administrador.");return;}
+ if(editingObjectiveId===id)cancelObjectiveLocation();
+ await selectGame(currentGame.id);
+ alert("Objetivo eliminado y asignaciones retiradas correctamente.");
+}
 function editObjectiveLocation(id){const obj=currentObjectives.find(o=>o.id===id);if(!obj)return;editingObjectiveId=id;$("editObjectivePanel").classList.remove("hidden");$("editObjectiveName").textContent=obj.name;$("editObjLat").value=obj.latitude??"";$("editObjLng").value=obj.longitude??"";$("editObjectiveStatus").textContent="Toca el mapa para elegir el nuevo punto, o escribe las coordenadas.";if(mapAdmin&&obj.latitude!=null&&obj.longitude!=null)mapAdmin.setView([Number(obj.latitude),Number(obj.longitude)],Math.max(mapAdmin.getZoom(),16));updateAdminEditMarker();$("editObjectivePanel").scrollIntoView({behavior:"smooth",block:"nearest"});}
 function cancelObjectiveLocation(){editingObjectiveId=null;$("editObjectivePanel").classList.add("hidden");if(adminEditMarker&&mapAdmin){mapAdmin.removeLayer(adminEditMarker);adminEditMarker=null;}}
 function updateAdminEditMarker(){if(!mapAdmin)return;if(adminEditMarker){mapAdmin.removeLayer(adminEditMarker);adminEditMarker=null;}if(!editingObjectiveId)return;const lat=Number($("editObjLat").value),lng=Number($("editObjLng").value);if($("editObjLat").value!==""&&$("editObjLng").value!==""&&Number.isFinite(lat)&&Number.isFinite(lng))adminEditMarker=L.circleMarker([lat,lng],{radius:12,color:"#f1ca52",weight:3,fillColor:"#f1ca52",fillOpacity:.5}).addTo(mapAdmin).bindPopup("Nueva ubicación propuesta");}
