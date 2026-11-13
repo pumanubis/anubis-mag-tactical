@@ -60,7 +60,7 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 </div>
 <div id="gameAdmin" class="hidden">
 <div class="panel">
-<div class="topline"><div><span class="tag" id="gameState">EN ESPERA</span><h2 id="selectedGameName" style="margin:8px 0">Operación</h2><div class="small" id="selectedGameId"></div></div><div class="actions"><button onclick="setGameStatus('active')">INICIAR</button><button class="danger" onclick="setGameStatus('finished')">FINALIZAR</button></div></div>
+<div class="topline"><div><span class="tag" id="gameState">EN ESPERA</span><h2 id="selectedGameName" style="margin:8px 0">Operación</h2><div class="small" id="selectedGameId"></div></div><div class="actions"><button id="startGameBtn" onclick="setGameStatus('active')">INICIAR</button><button id="finishGameBtn" class="secondary" onclick="setGameStatus('finished')">FINALIZAR Y CONSERVAR RESULTADOS</button><button id="deleteGameBtn" class="danger" onclick="deleteSelectedGame()">ELIMINAR PARTIDA Y SUS DATOS</button></div></div>
 </div>
 <div class="cols">
 <div class="panel">
@@ -154,7 +154,7 @@ async function selectGame(id){
  const {data:game,error}=await db.from("games").select("*").eq("id",id).single();if(error){alert(error.message);return;}currentGame=game;
  const [t,p,o]=await Promise.all([db.from("teams").select("*").eq("game_id",id).order("created_at"),db.from("game_players").select("*").eq("game_id",id).order("joined_at"),db.from("objectives").select("*").eq("game_id",id).order("created_at")]);
  if(t.error||p.error||o.error){alert((t.error||p.error||o.error).message);return;}
- currentTeams=t.data;currentPlayers=p.data;currentObjectives=o.data;$("gameAdmin").classList.remove("hidden");$("selectedGameName").textContent=game.name;$("selectedGameId").textContent="ID: "+game.id;$("gameState").textContent=game.status.toUpperCase();
+ currentTeams=t.data;currentPlayers=p.data;currentObjectives=o.data;$("gameAdmin").classList.remove("hidden");$("selectedGameName").textContent=game.name;$("selectedGameId").textContent="ID: "+game.id;renderAdminGameState();
  $("playerTeam").innerHTML=currentTeams.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join("");
  $("assignTeamsList").innerHTML=currentTeams.map(t=>'<label><input type="checkbox" value="'+t.id+'" style="width:auto"> '+escapeHtml(t.name)+'</label>').join("");
  $("assignPlayer").innerHTML=currentPlayers.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.callsign)+'</option>').join("");
@@ -165,8 +165,46 @@ async function selectGame(id){
  $("assignObjectives").innerHTML=currentObjectives.filter(o=>o.status==="available").map(o=>'<label><input type="checkbox" value="'+o.id+'" style="width:auto"> '+escapeHtml(o.name)+'</label>').join("")||"Primero crea objetivos.";
  await loadAssignedMissions();await loadAdminCaptureHistory();renderAdminMap();
 }
+let gameAdminBusy=false;
+function renderAdminGameState(){
+ if(!currentGame)return;
+ $("gameState").textContent=({waiting:"EN ESPERA",active:"ACTIVA",finished:"FINALIZADA"})[currentGame.status]||currentGame.status;
+ $("startGameBtn").disabled=gameAdminBusy||currentGame.status!=="waiting";
+ $("finishGameBtn").disabled=gameAdminBusy||currentGame.status==="finished";
+ $("deleteGameBtn").disabled=gameAdminBusy;
+}
 async function setGameStatus(status){
- if(!currentGame)return;const {error}=await db.from("games").update({status}).eq("id",currentGame.id);if(error){alert(error.message);return;}currentGame.status=status;$("gameState").textContent=status.toUpperCase();await loadGames();alert(status==="active"?"Operación iniciada.":"Operación finalizada.");
+ if(!currentGame||gameAdminBusy||!["active","finished"].includes(status))return;
+ if(!navigator.onLine){alert("Conéctate a internet para cambiar el estado de la partida.");return;}
+ const game=currentGame;
+ if(status==="finished"&&!confirm('¿Finalizar "'+game.name+'"? Los resultados y capturas se conservarán.'))return;
+ gameAdminBusy=true;renderAdminGameState();
+ try{
+  const {data,error}=await db.from("games").update({status}).eq("id",game.id).eq("status",game.status).select("id");
+  if(error||!data?.length){alert("No se pudo cambiar el estado: "+(error?.message||"La partida cambió o no tienes permisos."));return;}
+  if(currentGame?.id===game.id){currentGame.status=status;renderAdminGameState();}
+  await loadGames();
+  alert(status==="active"?"Operación iniciada.":"Partida finalizada. Sus resultados se conservaron.");
+ }finally{gameAdminBusy=false;renderAdminGameState();}
+}
+async function deleteSelectedGame(){
+ if(!currentGame||gameAdminBusy)return;
+ if(!navigator.onLine){alert("Conéctate a internet para eliminar la partida.");return;}
+ const game=currentGame;
+ const answer=prompt('Se eliminará definitivamente "'+game.name+'" junto con sus equipos, objetivos, misiones, capturas y ubicaciones. Las cuentas y las demás partidas se conservarán.\\n\\nEscribe ELIMINAR para confirmar.');
+ if(answer?.trim().toUpperCase()!=="ELIMINAR")return;
+ gameAdminBusy=true;renderAdminGameState();
+ try{
+  const {data,error}=await db.from("games").delete().eq("id",game.id).select("id");
+  if(error||!data?.length){alert("No se pudo eliminar la partida: "+(error?.message||"Ya no existe o no tienes permisos."));return;}
+  if(currentGame?.id===game.id){
+   if(editingObjectiveId)cancelObjectiveLocation();
+   currentGame=null;currentTeams=[];currentPlayers=[];currentObjectives=[];
+   $("gameAdmin").classList.add("hidden");
+  }
+  await loadGames();
+  alert("Partida eliminada. Las demás partidas y las cuentas no cambiaron.");
+ }finally{gameAdminBusy=false;renderAdminGameState();}
 }
 const tacticalModels={crate:"models/anubis_military_ammo_crate_realista.glb?v=33",radio:"models/radio.gltf",backpack:"models/backpack.gltf",fuel:"models/fuel.gltf"};
 function selectLibraryObject(){const key=$("objLibrary").value;$("objModel").value=key?new URL(tacticalModels[key],location.href).href:"";$("libraryPreview").classList.add("hidden");}
@@ -369,8 +407,17 @@ async function tacticalCheckCapturedObjectives(){
  tacticalCaptureBusy=true;
  try{
   const gameId=currentGame.id;
-  const {data,error}=await db.from("objectives").select("id,name,status,controlling_team_id").eq("game_id",gameId);
-  if(error||!data||currentGame?.id!==gameId)return;
+  const [objs,game]=await Promise.all([
+   db.from("objectives").select("id,name,status,controlling_team_id").eq("game_id",gameId),
+   db.from("games").select("status").eq("id",gameId).maybeSingle()
+  ]);
+  const {data,error}=objs;
+  if(error||!data||game.error||currentGame?.id!==gameId)return;
+  if(!game.data){clearPlayerGame("Esta partida ya no está disponible.");return;}
+  if(game.data.status!==currentGame.status){
+   if(game.data.status==="finished"){stopLiveGps();stopTacticalCamera();tacticalTarget=null;tacticalModelArrived=false;}
+   await loadPlayerGame();return;
+  }
   const snap=JSON.parse(localStorage.getItem("anubis_player_"+currentUser.id)||"null");
   const teamId=snap?.gp?.team_id;
   let changed=false;
@@ -401,6 +448,19 @@ function tacticalWatchCaptures(gameId){
  tacticalCheckCapturedObjectives();
  try{tacticalCaptureChannel=db.channel("tactical-captures-"+gameId).on("postgres_changes",{event:"UPDATE",schema:"public",table:"objectives",filter:"game_id=eq."+gameId},()=>tacticalCheckCapturedObjectives()).subscribe();}catch(e){console.warn("Realtime no disponible; sigue consulta periódica.",e);}
 }
+function clearPlayerGame(message){
+ const id=currentGame?.id;
+ stopLiveGps();stopTacticalCamera();tacticalTarget=null;tacticalModelArrived=false;
+ if(tacticalCapturePoll)clearInterval(tacticalCapturePoll);
+ tacticalCapturePoll=null;tacticalCaptureGameId=null;tacticalCaptureSeen.clear();
+ if(tacticalCaptureChannel){db.removeChannel(tacticalCaptureChannel);tacticalCaptureChannel=null;}
+ if(currentUser)localStorage.removeItem("anubis_player_"+currentUser.id);
+ if(id)localStorage.removeItem("anubis_tokens_"+id);
+ ++playerMapRenderVersion;playerMapOverlay?.clearLayers();gpsLiveMarker=null;gpsLiveLine=null;gpsObjectives=[];
+ currentGame=null;currentTeams=[];currentPlayers=[];
+ $("playerGameInfo").textContent=message;$("playerStatus").textContent="";
+ $("myObjectives").textContent="No tienes misiones asignadas."; $("arArea").textContent="";
+}
 async function loadPlayerGame(){
  if(!navigator.onLine){
   const snap=JSON.parse(localStorage.getItem("anubis_player_"+currentUser.id)||"null");
@@ -409,7 +469,8 @@ async function loadPlayerGame(){
   renderPlayerSnapshot(snap,true);await loadPlayerMap();return;
  }
  const {data:gp,error}=await db.from("game_players").select("id,game_id,team_id,callsign,status").eq("user_id",currentUser.id).eq("status","active").order("joined_at",{ascending:false}).limit(1).maybeSingle();
- if(error||!gp){$("playerGameInfo").textContent="No tienes una partida activa asignada. Contacta al administrador.";return;}
+ if(error){$("playerGameInfo").textContent="No se pudo cargar la operación. Revisa tu conexión.";return;}
+ if(!gp){clearPlayerGame("No tienes una partida asignada. Contacta al administrador.");return;}
  const [g,t,a,o]=await Promise.all([
   db.from("games").select("*").eq("id",gp.game_id).single(),
   db.from("teams").select("*").eq("id",gp.team_id).single(),
@@ -428,7 +489,7 @@ function renderPlayerSnapshot(snap,offline){
  currentGame=g;currentTeams=[t];currentPlayers=[gp];
  $("playerGameInfo").innerHTML="<b>"+escapeHtml(g.name)+"</b><br>Indicativo: "+escapeHtml(gp.callsign)+" · Equipo: "+escapeHtml(t.name)+" <span class='tag "+t.color+"'>"+(colors[t.color]||t.color)+"</span><br>Estado: "+g.status;
  $("playerStatus").textContent=offline?"MODO SIN CONEXIÓN. Los escaneos quedarán pendientes y se sincronizarán al recuperar internet.":(g.status==="active"?"Operación en curso. Mantén tu ubicación compartida para apoyar al equipo.":"La operación no está activa.");
- $("myObjectives").innerHTML=assignments.length?assignments.map(x=>{const o=x.objectives||{};const virtual=o.objective_type==="virtual";return '<div class="card"><div class="topline"><b>'+escapeHtml(o.name||"Misión")+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+(o.status==="captured"?"CAPTURADO":x.status.toUpperCase())+'</span></div>'+(x.is_secret?'<span class="tag yellow">MISIÓN SECRETA</span>':"")+'<p class="small">'+(virtual?"OBJETIVO VIRTUAL GPS · ":"OBJETIVO FÍSICO QR · ")+(o.latitude!=null?"GPS: "+Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+'</p>'+(o.visual_description?'<p>'+escapeHtml(o.visual_description)+'</p>':"")+(virtual&&o.status==="available"?'<button class="secondary" onclick="showAR(\''+encodeURIComponent(o.ar_asset_url||tacticalModels.crate)+'\',\''+escapeHtml(o.name)+'\',\''+o.id+'\')">📍 BUSCAR OBJETIVO ASIGNADO</button>':"")+(virtual&&o.status==="available"?'<button onclick="captureVirtualObjective(\''+o.id+'\')">CAPTURAR OBJETIVO VIRTUAL GPS</button>':"")+'</div>';}).join(""):"No tienes misiones asignadas todavía.";
+ $("myObjectives").innerHTML=assignments.length?assignments.map(x=>{const o=x.objectives||{};const virtual=o.objective_type==="virtual";return '<div class="card"><div class="topline"><b>'+escapeHtml(o.name||"Misión")+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+(o.status==="captured"?"CAPTURADO":x.status.toUpperCase())+'</span></div>'+(x.is_secret?'<span class="tag yellow">MISIÓN SECRETA</span>':"")+'<p class="small">'+(virtual?"OBJETIVO VIRTUAL GPS · ":"OBJETIVO FÍSICO QR · ")+(o.latitude!=null?"GPS: "+Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+'</p>'+(o.visual_description?'<p>'+escapeHtml(o.visual_description)+'</p>':"")+(virtual&&g.status==="active"&&o.status==="available"?'<button class="secondary" onclick="showAR(\''+encodeURIComponent(o.ar_asset_url||tacticalModels.crate)+'\',\''+escapeHtml(o.name)+'\',\''+o.id+'\')">📍 BUSCAR OBJETIVO ASIGNADO</button>':"")+(virtual&&g.status==="active"&&o.status==="available"?'<button onclick="captureVirtualObjective(\''+o.id+'\')">CAPTURAR OBJETIVO VIRTUAL GPS</button>':"")+'</div>';}).join(""):"No tienes misiones asignadas todavía.";
  $("arArea").textContent="Los modelos 3D se abrirán aquí cuando una misión tenga un archivo GLB/GLTF configurado por el administrador.";
 }
 let tacticalCameraStream=null;
@@ -728,6 +789,7 @@ async function captureVirtualObjective(id){
  });
 }
 async function captureObjective(raw){
+ if(!currentGame||currentGame.status!=="active"){msg("captureMsg","La partida debe estar activa.");return;}
  const hash=await sha256(raw),known=JSON.parse(localStorage.getItem("anubis_tokens_"+(currentGame?.id||""))||"[]"),objective=known.find(x=>x.token_hash===hash);
  if(!objective){msg("captureMsg","QR no válido para esta operación.");return;}
  if(objective.status!=="available"){msg("captureMsg","Este objetivo ya no está disponible.");return;}
