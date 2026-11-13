@@ -69,7 +69,7 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 <label>Descripción del objeto físico / elemento AR</label><textarea id="objectiveDescription" placeholder="Describe el objeto 3D realista que aparecerá en el terreno..."></textarea>
 <div class="row"><div><label>Latitud</label><input id="objLat" type="number" step="any" placeholder="Latitud GPS"></div><div><label>Longitud</label><input id="objLng" type="number" step="any" placeholder="Longitud GPS"></div></div>
 <label>Radio de activación (metros)</label><input id="objRadius" type="number" min="5" max="500" value="35">
-<label>BIBLIOTECA DE OBJETOS 3D</label><div class="row"><div><select id="objLibrary" onchange="selectLibraryObject()"><option value="">Sin modelo / elegir manualmente</option><option value="crate">📦 Caja de municiones</option><option value="radio">📻 Radio militar</option><option value="backpack">🎒 Mochila de suministros</option><option value="fuel">🛢️ Bidón de combustible</option></select></div><div><button class="secondary" onclick="previewLibraryObject()">VISTA PREVIA 3D</button></div></div><p class="small">Modelos originales de estilo militar simplificado. Selecciona uno y quedará asociado al objetivo.</p><div id="libraryPreview" class="hidden" style="height:260px;background:#111a10;border-radius:10px"></div><label>Modelo 3D propio (.glb / .gltf) URL (opcional)</label><input id="objModel" type="url" placeholder="https://.../objeto.glb" oninput="if(this.value)$('objLibrary').value=''">
+<label>BIBLIOTECA DE OBJETOS 3D</label><div class="row"><div><select id="objLibrary" onchange="selectLibraryObject()"><option value="">Sin modelo / elegir manualmente</option><option value="crate">📦 Caja de municiones</option><option value="radio">📻 Radio militar</option><option value="backpack">🎒 Mochila de suministros</option><option value="fuel">🛢️ Bidón de combustible</option></select></div><div><button class="secondary" onclick="previewLibraryObject()">VISTA PREVIA 3D</button></div></div><p class="small">La caja de municiones utiliza un modelo 3D realista con texturas. Otros modelos mantienen su versión anterior.</p><div id="libraryPreview" class="hidden" style="height:260px;background:#111a10;border-radius:10px"></div><label>Modelo 3D propio (.glb / .gltf) URL (opcional)</label><input id="objModel" type="url" placeholder="https://.../objeto.glb" oninput="if(this.value)$('objLibrary').value=''">
 <div class="actions"><button class="secondary" onclick="useCurrentPosition('objLat','objLng')">USAR MI GPS</button><button id="createObjectiveBtn" onclick="createObjective()">GUARDAR OBJETIVO + QR</button></div>
 <p id="objectiveMsg" class="status hidden"></p><div id="qrResult" class="hidden card"><b class="gold" id="qrTitle"></b><div id="qrBox"></div><p class="small">Imprime este QR y ubícalo en el objetivo. El código se muestra una sola vez.</p><button onclick="window.print()">IMPRIMIR QR</button></div>
 </div>
@@ -166,7 +166,7 @@ async function selectGame(id){
 async function setGameStatus(status){
  if(!currentGame)return;const {error}=await db.from("games").update({status}).eq("id",currentGame.id);if(error){alert(error.message);return;}currentGame.status=status;$("gameState").textContent=status.toUpperCase();await loadGames();alert(status==="active"?"Operación iniciada.":"Operación finalizada.");
 }
-const tacticalModels={crate:"https://cdn.3dassets.dev/assets/19896/v1/model.glb",radio:"models/radio.gltf",backpack:"models/backpack.gltf",fuel:"models/fuel.gltf"};
+const tacticalModels={crate:"models/anubis_military_ammo_crate_realista.glb?v=33",radio:"models/radio.gltf",backpack:"models/backpack.gltf",fuel:"models/fuel.gltf"};
 function selectLibraryObject(){const key=$("objLibrary").value;$("objModel").value=key?new URL(tacticalModels[key],location.href).href:"";$("libraryPreview").classList.add("hidden");}
 async function previewLibraryObject(){
  const url=$("objModel").value.trim(),panel=$("libraryPreview");
@@ -333,8 +333,8 @@ function renderPlayerSnapshot(snap,offline){
 }
 let tacticalCameraStream=null;
 async function showAR(url,name,objectiveId){
- // Modelo alternativo CC0 con materiales PBR para las cajas ya asignadas.
- try{const oldUrl=new URL(decodeURIComponent(url),location.href);if(/\/models\/crate\.gltf$/i.test(oldUrl.pathname)){url=encodeURIComponent("https://cdn.3dassets.dev/assets/19896/v1/model.glb");}}catch(e){}
+ // Actualiza el modelo de las cajas de misiones anteriores sin alterar datos de Supabase.
+ try{const assetUrl=new URL(decodeURIComponent(url),location.href);if(/\/models\/crate\.gltf$/i.test(assetUrl.pathname)||assetUrl.hostname==="cdn.3dassets.dev"&&assetUrl.pathname.includes("/assets/19896/")){url=encodeURIComponent(new URL("models/anubis_military_ammo_crate_realista.glb?v=33",location.href).href);}}catch(e){}
  stopTacticalCamera();
  const snap=JSON.parse(localStorage.getItem("anubis_player_"+(currentUser?.id||""))||"null");
  const assigned=snap?.assignments?.find(x=>x.objectives?.id===objectiveId);
