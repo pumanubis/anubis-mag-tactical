@@ -364,7 +364,7 @@ async function showAR(url,name,objectiveId){
    return;
   }
   $("arLoadStatus").textContent="Dentro de la zona asignada: "+distance+" m del punto (precisión GPS ±"+accuracy+" m). El GPS confirma la zona, no la posición exacta del objeto en la imagen. "+modeMessage;
-  $("arSearchContent").innerHTML='<div id="tacticalCameraStage" style="position:relative;height:380px;background:#273424;border-radius:12px;overflow:hidden"><video id="tacticalCameraVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:2"></video><model-viewer id="arModelViewer" src="'+escapeHtml(decodeURIComponent(url))+'" ar ar-modes="webxr scene-viewer quick-look" ar-placement="floor" ar-scale="fixed" scale="0.65 0.65 0.65" camera-controls shadow-intensity="1" shadow-softness="0.8" exposure="1.5" environment-image="neutral" camera-orbit="30deg 68deg 350%" field-of-view="30deg" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:transparent" alt="Modelo 3D del objetivo"></model-viewer></div><p class="small">RA ESPACIAL EXPERIMENTAL: apunta a una superficie plana y bien iluminada, mueve el celular lentamente en varias direcciones hasta que detecte el suelo y coloca la caja. Si queda flotando o se desplaza, reinicia la sesión de RA y vuelve a detectar el suelo. La ubicación es local: NO corresponde automáticamente al punto GPS del administrador. Usa la captura GPS como respaldo.</p><button onclick="launchNativeTacticalAR()">🥽 VER EN RA ESPACIAL (COLOCAR EN SUELO)</button><button onclick="launchTacticalAR()">📷 VER REFERENCIA EN CÁMARA</button><button onclick="captureVirtualObjective(\''+objectiveId+'\')">🎯 SOLICITAR CAPTURA GPS</button><button class="secondary" onclick="stopTacticalCamera()">CERRAR CÁMARA</button>';
+  $("arSearchContent").innerHTML='<div id="tacticalCameraStage" style="position:relative;height:380px;background:#273424;border-radius:12px;overflow:hidden"><video id="tacticalCameraVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:2"></video><model-viewer id="arModelViewer" src="'+escapeHtml(decodeURIComponent(url))+'" ar ar-modes="webxr scene-viewer quick-look" ar-placement="floor" ar-scale="fixed" scale="0.65 0.65 0.65" camera-controls shadow-intensity="1" shadow-softness="0.8" exposure="1.5" environment-image="neutral" camera-orbit="30deg 68deg 350%" field-of-view="30deg" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:transparent" alt="Modelo 3D del objetivo"></model-viewer></div><p class="small">RA ESPACIAL EXPERIMENTAL: apunta a una superficie plana y bien iluminada, mueve el celular lentamente en varias direcciones hasta que detecte el suelo y coloca la caja. Si queda flotando o se desplaza, reinicia la sesión de RA y vuelve a detectar el suelo. La ubicación es local: NO corresponde automáticamente al punto GPS del administrador. Usa la captura GPS como respaldo.</p><button onclick="launchNativeTacticalAR()">🥽 INICIAR / REINICIAR RA ESPACIAL</button><button onclick="launchTacticalAR()">📷 VER REFERENCIA EN CÁMARA</button><button onclick="captureVirtualObjective(\''+objectiveId+'\')">🎯 SOLICITAR CAPTURA GPS</button><button class="secondary" onclick="stopTacticalCamera()">CERRAR CÁMARA</button>';
   loadTacticalModelViewer().catch(e=>{$("arLoadStatus").textContent="No se pudo cargar el visor: "+e.message;});
  },e=>{$("arLoadStatus").textContent="No se pudo comprobar tu ubicación: "+e.message;},{enableHighAccuracy:true,maximumAge:0,timeout:20000});
 }
@@ -400,7 +400,9 @@ function stopTacticalCamera(){
  if(tacticalCameraStream){tacticalCameraStream.getTracks().forEach(t=>t.stop());tacticalCameraStream=null;}
  const video=$("tacticalCameraVideo");if(video){video.pause();video.srcObject=null;video.style.display="none";}const viewer=$("arModelViewer");if(viewer){viewer.style.cssText="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:transparent;pointer-events:auto";}
 }
+let tacticalARAbort=new AbortController();
 async function launchNativeTacticalAR(){
+ tacticalARAbort.abort();tacticalARAbort=new AbortController();
  const viewer=$("arModelViewer"),status=$("arLoadStatus");if(!viewer)return;
  stopTacticalCamera();
  status.textContent="Comprobando realidad aumentada con seguimiento del suelo...";
@@ -408,6 +410,13 @@ async function launchNativeTacticalAR(){
   await loadTacticalModelViewer();
   if(!viewer.canActivateAR){status.textContent="No hay un modo de RA disponible en este dispositivo. Prueba Chrome actualizado y Google Play Services for AR, o utiliza la vista de cámara GPS.";return;}
   status.textContent="Abriendo RA espacial experimental. Escanea lentamente un suelo plano con buena luz antes de colocar la caja. Si el seguimiento falla, sal de RA y vuelve a entrar. La posición no está fijada por GPS.";
+  viewer.addEventListener("ar-status",function tacticalARStatus(event){
+   const state=event.detail?.status;
+   if(state==="session-started")status.textContent="Sesión de RA iniciada. Detecta un suelo plano antes de colocar el objeto. Si pierde seguimiento, reinicia la RA.";
+   else if(state==="object-placed")status.textContent="Caja colocada en RA local. Camina lentamente alrededor para comprobar estabilidad. No está anclada al GPS.";
+   else if(state==="failed")status.textContent="Falló la RA espacial. Puedes usar la cámara normal y la captura GPS.";
+   else if(state==="not-presenting")status.textContent="Sesión RA cerrada. Puedes reiniciarla para volver a detectar el suelo.";
+  },{signal:tacticalARAbort.signal});
   await viewer.activateAR();
  }catch(e){status.textContent="No se pudo iniciar RA espacial: "+(e.message||e)+". La vista de cámara normal sigue disponible.";}
 }
