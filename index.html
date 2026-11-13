@@ -97,8 +97,8 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 <div class="panel"><h2>MIS OBJETIVOS / MISIONES</h2><div id="myObjectives"></div></div>
 <div class="panel"><h2>CAPTURAR OBJETIVO QR</h2><p class="muted">Escanea el código físico del objetivo. Una vez capturado, desaparece para todos los equipos.</p><button onclick="startScanner()">ACTIVAR CÁMARA Y ESCANEAR</button><button class="secondary" onclick="stopScanner()">DETENER CÁMARA</button><div id="reader"></div><p id="captureMsg" class="status hidden"></p></div>
 </div>
-<div class="panel"><h2>MAPA TÁCTICO GPS</h2><div class="actions"><button class="secondary" onclick="setTacticalMapLayer(false)">MAPA NORMAL</button><button onclick="setTacticalMapLayer(true)">SATÉLITE</button></div><div id="playerMap"></div><div class="compass-wrap"><div class="compass-dial"><div id="compassArrow" class="compass-arrow">↑</div></div><div class="compass-info"><strong>BRÚJULA AL OBJETIVO</strong><div id="compassInfo">Activa tu GPS para localizar el objetivo.</div><button class="secondary" id="compassEnableBtn" onclick="enableTacticalCompass()">ACTIVAR BRÚJULA</button></div></div><p id="gpsNavigation" class="small">Pulsa COMPARTIR MI UBICACIÓN para localizarte.</p><a id="gpsDirections" class="hidden" target="_blank" rel="noopener noreferrer" style="display:none;margin:8px 0;color:#f1ca52" href="#">ABRIR RUTA A PIE EN GOOGLE MAPS</a><div class="actions"><button id="gpsLiveBtn" onclick="toggleLiveGps()">INICIAR GPS EN VIVO</button><button class="secondary" onclick="shareLocation()">UBICACIÓN UNA VEZ</button><button class="secondary" onclick="loadPlayerMap()">ACTUALIZAR MAPA</button></div><p class="small">Tu ubicación solo se comparte con integrantes de tu mismo equipo y administradores.</p></div>
-<div class="panel"><h2>REALIDAD AUMENTADA</h2><div id="arArea" class="muted">Selecciona una misión que tenga un modelo 3D configurado.</div></div>
+<div class="panel"><h2>MAPA TÁCTICO GPS</h2><div class="actions"><button class="secondary" onclick="setTacticalMapLayer(false)">MAPA NORMAL</button><button onclick="setTacticalMapLayer(true)">SATÉLITE</button></div><div id="playerMap"></div><div class="compass-wrap"><div class="compass-dial"><div id="compassArrow" class="compass-arrow">↑</div></div><div class="compass-info"><strong>BRÚJULA AL OBJETIVO</strong><div id="compassInfo">Activa tu GPS para localizar el objetivo.</div><button class="secondary" id="compassEnableBtn" onclick="enableTacticalCompass()">ACTIVAR BRÚJULA</button></div></div><p id="gpsNavigation" class="small" hidden></p><a id="gpsDirections" class="hidden" target="_blank" rel="noopener noreferrer" style="display:none;margin:8px 0;color:#f1ca52" href="#">ABRIR RUTA A PIE EN GOOGLE MAPS</a><div class="actions"><button id="gpsLiveBtn" onclick="toggleLiveGps()">INICIAR GPS EN VIVO</button><button class="secondary" onclick="loadPlayerMap()">ACTUALIZAR MAPA</button></div></div>
+<div id="playerArPanel" class="panel hidden"><h2>REALIDAD AUMENTADA</h2><div id="arArea" class="muted"></div></div>
 </section>
 </section>
 </main>
@@ -140,7 +140,7 @@ async function enterApp(user){
  else{$("playerView").classList.remove("hidden");autoStartTacticalCompass();$("adminView").classList.add("hidden");await loadPlayerGame();}
  if(navigator.onLine)syncPendingCaptures();
 }
-async function logout(){if(compassHandler){window.removeEventListener("deviceorientation",compassHandler,true);compassHandler=null;}deviceHeading=null;compassEnabled=false;stopLiveGps();await stopScanner();await db.auth.signOut();currentUser=null;currentProfile=null;currentGame=null;$("app").classList.add("hidden");$("login").classList.remove("hidden");$("pin").value="";}
+async function logout(){if(compassHandler){window.removeEventListener("deviceorientation",compassHandler,true);compassHandler=null;}deviceHeading=null;compassEnabled=false;stopLiveGps();stopTacticalCamera();tacticalTarget=null;$("arArea").textContent="";$("playerArPanel").classList.add("hidden");await stopScanner();await db.auth.signOut();currentUser=null;currentProfile=null;currentGame=null;$("app").classList.add("hidden");$("login").classList.remove("hidden");$("pin").value="";}
 async function createGame(){
  const name=$("gameName").value.trim(),count=Number($("teamCount").value);if(name.length<3){msg("createMsg","El nombre debe tener al menos 3 caracteres.");return;}
  try{const {data,error}=await db.rpc("create_game_with_teams",{p_name:name,p_team_count:count});if(error)throw error;$("gameName").value="";msg("createMsg","Partida creada con "+count+" equipos.");await loadGames();await selectGame(data);}
@@ -526,7 +526,7 @@ async function tacticalCheckCapturedObjectives(){
     const rival=obj.controlling_team_id&&obj.controlling_team_id!==teamId;
     tacticalCaptureNotice((rival?"⚠️ OBJETIVO PERDIDO: ":"🎯 OBJETIVO CAPTURADO: ")+obj.name+(rival?" · El equipo rival llegó primero.":" · Ya no está disponible."));
     changed=true;
-    if(tacticalTarget?.objectiveId===obj.id||tacticalTarget?.id===obj.id){tacticalModelArrived=false;stopTacticalCamera();const s=$("arLoadStatus");if(s)s.textContent="Objetivo capturado: cámara desactivada.";}
+    if(!tacticalCameraCapturing&&(tacticalTarget?.objectiveId===obj.id||tacticalTarget?.id===obj.id)){tacticalModelArrived=false;stopTacticalCamera();const s=$("arLoadStatus");if(s)s.textContent="Objetivo capturado: cámara desactivada.";}
    }
    if(obj.status==="retired"&&(previous!==undefined?previous!=="retired":(snap?.objectives||[]).some(x=>x.id===obj.id&&x.status!=="retired"))){
     changed=true;
@@ -558,7 +558,7 @@ function clearPlayerGame(message){
  ++playerMapRenderVersion;playerMapOverlay?.clearLayers();gpsLiveMarker=null;gpsLiveLine=null;gpsObjectives=[];
  currentGame=null;currentTeams=[];currentPlayers=[];
  $("playerGameInfo").textContent=message;$("playerStatus").textContent="";
- $("myObjectives").textContent="No tienes misiones asignadas."; $("arArea").textContent="";
+ $("myObjectives").textContent="No tienes misiones asignadas."; $("arArea").textContent="";$("playerArPanel").classList.add("hidden");
 }
 async function loadPlayerGame(){
  if(!navigator.onLine){
@@ -591,15 +591,15 @@ function renderPlayerSnapshot(snap,offline){
  currentGame=g;currentTeams=[t];currentPlayers=[gp];
  $("playerGameInfo").innerHTML="<b>"+escapeHtml(g.name)+"</b><br>Indicativo: "+escapeHtml(gp.callsign)+" · Equipo: "+escapeHtml(t.name)+" <span class='tag "+t.color+"'>"+(colors[t.color]||t.color)+"</span><br>Estado: "+g.status;
  $("playerStatus").textContent=offline?"MODO SIN CONEXIÓN. Los escaneos quedarán pendientes y se sincronizarán al recuperar internet.":(g.status==="active"?"Operación en curso. Mantén tu ubicación compartida para apoyar al equipo.":"La operación no está activa.");
- $("myObjectives").innerHTML=assignments.length?assignments.map(x=>{const o=x.objectives||{};const virtual=o.objective_type==="virtual";return '<div class="card"><div class="topline"><b>'+escapeHtml(o.name||"Misión")+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+(o.status==="captured"?"CAPTURADO":x.status.toUpperCase())+'</span></div>'+(x.is_secret?'<span class="tag yellow">MISIÓN SECRETA</span>':"")+'<p class="small">'+(virtual?"OBJETIVO VIRTUAL GPS · ":"OBJETIVO FÍSICO QR · ")+(o.latitude!=null?"GPS: "+Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+'</p>'+(o.visual_description?'<p>'+escapeHtml(o.visual_description)+'</p>':"")+(virtual&&g.status==="active"&&o.status==="available"?'<button class="secondary" onclick="showAR(\''+encodeURIComponent(o.ar_asset_url||tacticalModels.crate)+'\',\''+escapeHtml(o.name)+'\',\''+o.id+'\')">📍 BUSCAR OBJETIVO ASIGNADO</button>':"")+(virtual&&g.status==="active"&&o.status==="available"?'<button onclick="captureVirtualObjective(\''+o.id+'\')">CAPTURAR OBJETIVO VIRTUAL GPS</button>':"")+'</div>';}).join(""):"No tienes misiones asignadas todavía.";
- $("arArea").textContent="Los modelos 3D se abrirán aquí cuando una misión tenga un archivo GLB/GLTF configurado por el administrador.";
+ $("myObjectives").innerHTML=assignments.length?assignments.map(x=>{const o=x.objectives||{};const virtual=o.objective_type==="virtual";return '<div class="card"><div class="topline"><b>'+escapeHtml(o.name||"Misión")+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+(o.status==="captured"?"CAPTURADO":x.status.toUpperCase())+'</span></div>'+(x.is_secret?'<span class="tag yellow">MISIÓN SECRETA</span>':"")+'<p class="small">'+(virtual?"OBJETIVO VIRTUAL GPS · ":"OBJETIVO FÍSICO QR · ")+(o.latitude!=null?"GPS: "+Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+'</p>'+(o.visual_description?'<p>'+escapeHtml(o.visual_description)+'</p>':"")+(virtual&&g.status==="active"&&o.status==="available"?'<button class="secondary" onclick="showAR(\''+o.id+'\')">📍 BUSCAR OBJETIVO ASIGNADO</button>':"")+'</div>';}).join(""):"No tienes misiones asignadas todavía.";
+ if(tacticalTarget&&(!tacticalCameraCapturing||g.status!=="active")&&(g.status!=="active"||!assignments.some(x=>x.objectives?.id===tacticalTarget.objectiveId&&x.objectives.status==="available")))closePlayerCamera();
 }
 let tacticalCameraStream=null;
 let tacticalModelArrived=false,tacticalLastGoodFix=0,tacticalCameraRefreshTimer=null;
 let tacticalTarget=null,tacticalHeading=null,tacticalOrientationListener=null,tacticalGeoWatch=null,tacticalCompassPermissionNeeded=false,tacticalHeadingRaw=null,tacticalHeadingSource="",tacticalHeadingOffset=0,tacticalAbsoluteLast=0;
 function tacticalBearing(a,b,c,d){const R=Math.PI/180,delta=(d-b)*R,y=Math.sin(delta)*Math.cos(c*R),x=Math.cos(a*R)*Math.sin(c*R)-Math.sin(a*R)*Math.cos(c*R)*Math.cos(delta);return(Math.atan2(y,x)*180/Math.PI+360)%360;}
 function tacticalCalibrateHeading(){
- if(tacticalHeadingRaw==null||!tacticalTarget){const el=$("tacticalDirection");if(el)el.textContent="No hay lectura absoluta de brújula. Comprueba los sensores del teléfono.";return;}
+ if(tacticalHeadingRaw==null||!tacticalTarget||tacticalTarget.lat==null){const el=$("tacticalDirection");if(el)el.textContent="No hay lectura absoluta de brújula. Comprueba los sensores del teléfono.";return;}
  const bearing=tacticalBearing(tacticalTarget.lat,tacticalTarget.lon,tacticalTarget.goalLat,tacticalTarget.goalLon);
  tacticalHeadingOffset=((bearing-tacticalHeadingRaw+540)%360)-180;
  tacticalHeading=(tacticalHeadingRaw+tacticalHeadingOffset+360)%360;
@@ -609,7 +609,7 @@ function tacticalCalibrateHeading(){
 function tacticalResetHeading(){tacticalHeadingOffset=0;tacticalHeading=tacticalHeadingRaw;tacticalUpdateDirection();}
 function tacticalUpdateCameraTarget(){
  const viewer=$("arModelViewer"),video=$("tacticalCameraVideo"),direction=$("tacticalDirection");
- if(!viewer||!video||video.style.display==="none"||!tacticalTarget)return;
+ if(!viewer||!video||video.style.display==="none"||!tacticalTarget||tacticalTarget.lat==null)return;
  const t=tacticalTarget,bearing=tacticalBearing(t.lat,t.lon,t.goalLat,t.goalLon);
  const distance=metersBetween([t.lat,t.lon],[t.goalLat,t.goalLon]);
  const accuracy=Number(t.accuracy)||Infinity;
@@ -634,45 +634,33 @@ function tacticalUpdateCameraTarget(){
  :"🧭 Sigue hacia el punto del administrador: "+Math.round(distance)+" m · rumbo "+Math.round(bearing)+"°"+(delta===null?"":Math.abs(delta)<25?" · AL FRENTE":delta>0?" · DERECHA "+Math.round(delta)+"°":" · IZQUIERDA "+Math.round(-delta)+"°");
 }
 
-function tacticalUpdateDirection(){const el=$("tacticalDirection");if(!el||!tacticalTarget)return;const t=tacticalTarget;const bearing=tacticalBearing(t.lat,t.lon,t.goalLat,t.goalLon);const diff=tacticalHeading==null?null:((bearing-tacticalHeading+540)%360)-180;el.textContent=(diff==null?"Rumbo al objetivo: "+Math.round(bearing)+"° (activa brújula para orientar la cámara)":Math.abs(diff)<20?"⬆️ OBJETIVO AL FRENTE":diff>0?"➡️ GIRA "+Math.round(diff)+"° A LA DERECHA":"⬅️ GIRA "+Math.round(-diff)+"° A LA IZQUIERDA")+" · GPS aproximado";tacticalUpdateCameraTarget();}
+function tacticalUpdateDirection(){const el=$("tacticalDirection");if(!el||!tacticalTarget||tacticalTarget.lat==null)return;const t=tacticalTarget;const bearing=tacticalBearing(t.lat,t.lon,t.goalLat,t.goalLon);const diff=tacticalHeading==null?null:((bearing-tacticalHeading+540)%360)-180;el.textContent=(diff==null?"Rumbo al objetivo: "+Math.round(bearing)+"° (activa brújula para orientar la cámara)":Math.abs(diff)<20?"⬆️ OBJETIVO AL FRENTE":diff>0?"➡️ GIRA "+Math.round(diff)+"° A LA DERECHA":"⬅️ GIRA "+Math.round(-diff)+"° A LA IZQUIERDA")+" · GPS aproximado";tacticalUpdateCameraTarget();}
 async function tacticalEnableDirection(auto=false){if(typeof DeviceOrientationEvent==="undefined"){tacticalUpdateDirection();return;}try{if(typeof DeviceOrientationEvent.requestPermission==="function"&&/iPad|iPhone|iPod/.test(navigator.userAgent)){if(auto){tacticalCompassPermissionNeeded=true;return;}const p=await DeviceOrientationEvent.requestPermission();if(p!=="granted")return;tacticalCompassPermissionNeeded=false;}if(tacticalOrientationListener){window.removeEventListener("deviceorientation",tacticalOrientationListener,true);window.removeEventListener("deviceorientationabsolute",tacticalOrientationListener,true);}tacticalOrientationListener=e=>{let raw=null,source="";if(typeof e.webkitCompassHeading==="number"){raw=e.webkitCompassHeading;source="brújula iOS";}else if(e.absolute===true&&typeof e.alpha==="number"){raw=(360-e.alpha)%360;source="orientación absoluta";}if(raw===null){if(Date.now()-tacticalAbsoluteLast>4000){tacticalHeading=null;tacticalHeadingRaw=null;tacticalHeadingSource="sin norte absoluto";tacticalUpdateDirection();}return;}tacticalAbsoluteLast=Date.now();tacticalHeadingRaw=raw;tacticalHeadingSource=source;tacticalHeading=(raw+tacticalHeadingOffset+360)%360;tacticalUpdateDirection();};window.addEventListener("deviceorientation",tacticalOrientationListener,true);window.addEventListener("deviceorientationabsolute",tacticalOrientationListener,true);tacticalUpdateDirection();}catch(e){tacticalUpdateDirection();}}
 
-async function showAR(url,name,objectiveId){
- // Actualiza el modelo de las cajas de misiones anteriores sin alterar datos de Supabase.
- try{const assetUrl=new URL(decodeURIComponent(url),location.href);if(/\/models\/crate\.gltf$/i.test(assetUrl.pathname)||assetUrl.hostname==="cdn.3dassets.dev"&&assetUrl.pathname.includes("/assets/19896/")){url=encodeURIComponent(new URL("models/anubis_military_ammo_crate_realista.glb?v=33",location.href).href);}}catch(e){}
- stopTacticalCamera();
+function showAR(objectiveId){
  const snap=JSON.parse(localStorage.getItem("anubis_player_"+(currentUser?.id||""))||"null");
- const assigned=snap?.assignments?.find(x=>x.objectives?.id===objectiveId);
- const objective=assigned?.objectives;
- $("arArea").innerHTML='<h3>'+escapeHtml(name)+'</h3><p id="arLoadStatus" class="small">Comprobando el punto configurado por el administrador...</p><div id="arSearchContent"></div>';
- $("arArea").scrollIntoView({behavior:"smooth",block:"start"});
+ const objective=snap?.assignments?.find(x=>x.objectives?.id===objectiveId)?.objectives;
+ stopTacticalCamera();tacticalTarget=null;
+ const area=$("arArea");$("playerArPanel").classList.remove("hidden");
+ area.innerHTML='<h3></h3><p id="arLoadStatus" class="small" aria-live="polite"></p><div id="arSearchContent"></div>';
+ area.querySelector("h3").textContent=objective?.name||"Objetivo";
+ const status=$("arLoadStatus"),search=$("arSearchContent");
+ area.scrollIntoView({behavior:"smooth",block:"start"});
  if(!objective||objective.status!=="available"||objective.objective_type!=="virtual"||objective.latitude==null||objective.longitude==null){
-  $("arLoadStatus").textContent="Objetivo sin ubicación GPS asignada. Contacta al administrador.";return;
+  status.textContent="Objetivo no disponible o sin coordenadas GPS.";return;
  }
- if(currentGame?.status!=="active"||objective.status==="captured"){
-  $("arLoadStatus").textContent="La partida debe estar activa y el objetivo pendiente de captura.";return;
- }
- if(!navigator.geolocation){$("arLoadStatus").textContent="Este dispositivo no tiene GPS disponible.";return;}
- let xrSpatial=false;
- try{xrSpatial=!!navigator.xr&&await navigator.xr.isSessionSupported("immersive-ar");}catch(e){}
- const modeMessage=xrSpatial?"Este teléfono admite RA espacial básica; el anclaje geográfico exacto todavía no está implementado. Se utilizará el respaldo GPS.":"Modo compatible: búsqueda GPS y referencia 3D. No necesitas RA geoespacial para participar.";
- $("arLoadStatus").textContent=modeMessage+" Comprobando distancia...";
- navigator.geolocation.getCurrentPosition(p=>{
-  const a=p.coords.latitude*Math.PI/180,b=Number(objective.latitude)*Math.PI/180;
-  const dLat=b-a,dLon=(Number(objective.longitude)-p.coords.longitude)*Math.PI/180;
-  const h=Math.sin(dLat/2)**2+Math.cos(a)*Math.cos(b)*Math.sin(dLon/2)**2;
-  const distance=Math.round(6371000*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h)));
-  const radius=Number(objective.radius_m||35),accuracy=Math.round(p.coords.accuracy);
-  // Permitir abrir la cámara durante la aproximación; el modelo se revela únicamente al llegar.
-  if(distance>radius)$("arLoadStatus").textContent="Aún fuera de la zona de misión: "+distance+" m. Puedes abrir la cámara para seguir el rumbo, pero la caja seguirá oculta hasta llegar al punto GPS.";
-  tacticalModelArrived=false;tacticalLastGoodFix=0;
-  tacticalTarget={objectiveId:objectiveId,lat:p.coords.latitude,lon:p.coords.longitude,goalLat:Number(objective.latitude),goalLon:Number(objective.longitude),radius:Number(objective.radius_m||35),accuracy:p.coords.accuracy};tacticalHeading=null;
-  $("arLoadStatus").textContent="Dentro de la zona asignada: "+distance+" m del punto (precisión GPS ±"+accuracy+" m). El GPS confirma la zona, no la posición exacta del objeto en la imagen. "+modeMessage;
-  $("arSearchContent").innerHTML='<div id="tacticalCameraStage" style="position:relative;height:380px;background:#273424;border-radius:12px;overflow:hidden"><button id="tacticalTapCapture" onclick="captureTacticalCameraObjective()" style="display:none;position:absolute;left:15%;top:27%;width:70%;height:46%;z-index:8;background:rgba(213,189,104,.14);border:2px dashed #d5bd68;color:#fff7d1;font-weight:800;text-shadow:0 2px 5px #000;cursor:pointer">🎯 TOCA PARA CAPTURAR</button><div id="tacticalCameraCaptureStatus" style="display:none;position:absolute;top:6px;left:5%;width:90%;z-index:9;background:#182719ed;color:white;padding:10px;border-radius:8px;text-align:center;font-weight:bold"></div><div id="tacticalGpsSight" style="display:none;position:absolute;top:43%;left:50%;transform:translateX(-50%);z-index:5;padding:9px 12px;background:rgba(0,0,0,.68);border:2px solid #e9c46a;color:#ffe7a2;border-radius:8px;font-weight:bold;white-space:nowrap;pointer-events:none">◇ OBJETIVO GPS</div><div id="tacticalGpsUncertainty" style="display:none;position:absolute;bottom:8px;left:8px;right:8px;z-index:5;padding:7px;background:rgba(0,0,0,.65);color:#fff;text-align:center;font-size:12px;pointer-events:none"></div><video id="tacticalCameraVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:2"></video><model-viewer id="arModelViewer" src="'+escapeHtml(decodeURIComponent(url))+'" ar ar-modes="webxr scene-viewer quick-look" ar-placement="floor" ar-scale="fixed" scale="0.65 0.65 0.65" camera-controls shadow-intensity="1" shadow-softness="0.8" exposure="1.5" environment-image="neutral" camera-orbit="30deg 68deg 350%" field-of-view="30deg" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:transparent" alt="Modelo 3D del objetivo"></model-viewer></div><p class="small">RA espacial opcional: coloca el objeto en una superficie detectada. No está fijado a las coordenadas GPS del administrador; utiliza la brújula del mapa táctico para orientarte hacia ese punto.</p><div id="tacticalDirection" class="small">Rumbo al objetivo GPS</div><div class="actions"><button class="secondary" onclick="tacticalCalibrateHeading()">🧭 CALIBRAR MIRANDO AL PUNTO CONOCIDO</button><button class="secondary" onclick="tacticalResetHeading()">RESTABLECER BRÚJULA</button></div><p class="small">Calibra solo si sabes dónde está físicamente el punto marcado por el administrador. No corrige errores de GPS.</p><button onclick="launchNativeTacticalAR()">🥽 VER EN RA ESPACIAL (COLOCAR EN SUELO)</button><button id="tacticalCompassPermission" style="display:none" onclick="tacticalEnableDirection()">🧭 PERMITIR SENSOR (REQUERIDO POR iOS)</button><button onclick="launchTacticalAR()">📷 VER OBJETIVO VIRTUAL EN CÁMARA</button><button onclick="captureVirtualObjective(\''+objectiveId+'\')">🎯 SOLICITAR CAPTURA GPS</button><button class="secondary" onclick="stopTacticalCamera()">CERRAR CÁMARA</button>';
-  tacticalEnableDirection(true).then(()=>{const b=$("tacticalCompassPermission");if(b)b.style.display=tacticalCompassPermissionNeeded?"block":"none";});
-  tacticalUpdateDirection();
-  loadTacticalModelViewer().catch(e=>{$("arLoadStatus").textContent="No se pudo cargar el visor: "+e.message;});
- },e=>{$("arLoadStatus").textContent="No se pudo comprobar tu ubicación: "+e.message;},{enableHighAccuracy:true,maximumAge:0,timeout:20000});
+ if(currentGame?.status!=="active"){status.textContent="La partida debe estar activa.";return;}
+ if(!navigator.geolocation){status.textContent="Este dispositivo no tiene GPS disponible.";return;}
+ let url=objective.ar_asset_url||tacticalModels.crate;
+ try{const assetUrl=new URL(url,location.href);if(/\/models\/crate\.gltf$/i.test(assetUrl.pathname)||assetUrl.hostname==="cdn.3dassets.dev"&&assetUrl.pathname.includes("/assets/19896/"))url=tacticalModels.crate;}catch(e){}
+ tacticalModelArrived=false;tacticalLastGoodFix=0;tacticalHeading=null;
+ tacticalTarget={objectiveId,lat:null,lon:null,goalLat:Number(objective.latitude),goalLon:Number(objective.longitude),radius:Number(objective.radius_m||35),accuracy:null};
+ search.innerHTML='<div id="tacticalCameraStage" style="position:relative;height:clamp(200px,42vw,280px);width:100%;max-width:520px;margin-inline:auto;background:#273424;border-radius:12px;overflow:hidden"><button id="tacticalTapCapture" onclick="captureTacticalCameraObjective()" style="display:none;position:absolute;left:15%;top:27%;width:70%;height:46%;z-index:8;background:rgba(213,189,104,.14);border:2px dashed #d5bd68;color:#fff7d1;font-weight:800;text-shadow:0 2px 5px #000;cursor:pointer">🎯 TOCA PARA CAPTURAR</button><div id="tacticalCameraCaptureStatus" style="display:none;position:absolute;top:6px;left:5%;width:90%;z-index:9;background:#182719ed;color:white;padding:10px;border-radius:8px;text-align:center;font-weight:bold"></div><div id="tacticalGpsSight" style="display:none;position:absolute;top:43%;left:50%;transform:translateX(-50%);z-index:5;padding:9px 12px;background:rgba(0,0,0,.68);border:2px solid #e9c46a;color:#ffe7a2;border-radius:8px;font-weight:bold;white-space:nowrap;pointer-events:none">◇ OBJETIVO GPS</div><div id="tacticalGpsUncertainty" style="display:none;position:absolute;bottom:8px;left:8px;right:8px;z-index:5;padding:7px;background:rgba(0,0,0,.65);color:#fff;text-align:center;font-size:12px;pointer-events:none"></div><video id="tacticalCameraVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:2"></video><model-viewer id="arModelViewer" src="'+escapeHtml(url)+'" ar ar-modes="webxr scene-viewer quick-look" ar-placement="floor" ar-scale="fixed" scale="0.50 0.50 0.50" camera-controls shadow-intensity="1" shadow-softness="0.8" exposure="1.5" environment-image="neutral" camera-orbit="30deg 68deg 350%" field-of-view="30deg" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:transparent" alt="Modelo 3D del objetivo"></model-viewer></div><div id="tacticalDirection" class="small">Rumbo al objetivo GPS</div><div class="actions"><button class="secondary" onclick="tacticalCalibrateHeading()">🧭 CALIBRAR MIRANDO AL PUNTO CONOCIDO</button><button class="secondary" onclick="tacticalResetHeading()">RESTABLECER BRÚJULA</button></div><button onclick="launchNativeTacticalAR()">🥽 VER EN RA ESPACIAL (COLOCAR EN SUELO)</button><button id="tacticalCompassPermission" style="display:none" onclick="tacticalEnableDirection()">🧭 PERMITIR SENSOR (REQUERIDO POR iOS)</button><button class="secondary" onclick="closePlayerCamera()">CERRAR CÁMARA</button>';
+ launchTacticalAR();
+}
+function closePlayerCamera(){
+ stopTacticalCamera();tacticalTarget=null;
+ $("arArea").textContent="";$("playerArPanel").classList.add("hidden");
 }
 function checkARGpsDistance(id){
  const status=$("arGpsStatus");if(!status)return;
@@ -690,26 +678,33 @@ function checkARGpsDistance(id){
   status.textContent="Distancia al objetivo: "+distance+" m · radio permitido: "+radius+" m · precisión GPS: ±"+Math.round(p.coords.accuracy)+" m. "+(distance<=radius?"Estás dentro del radio aproximado. Puedes intentar capturar.":"Acércate "+(distance-radius)+" m más al punto GPS.");
  },e=>{status.textContent="Error GPS: "+e.message;},{enableHighAccuracy:true,maximumAge:0,timeout:20000});
 }
+let cameraRequestVersion=0;
 async function launchTacticalAR(){
  const status=$("arLoadStatus"),video=$("tacticalCameraVideo");
  if(!video)return;
  if(!navigator.mediaDevices?.getUserMedia){status.textContent="Este navegador no permite usar la cámara. Abre la aplicación desde Chrome con HTTPS.";return;}
+ stopTacticalCamera();
+ const requestVersion=cameraRequestVersion;
  try{
-  stopTacticalCamera();
-  status.textContent="Solicitando permiso de cámara...";
-  tacticalCameraStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}}});
-  video.srcObject=tacticalCameraStream;video.style.display="block";await video.play();
-  tacticalEnableDirection(true);
-  tacticalLastGoodFix=Date.now();
+  const viewer=$("arModelViewer");
+  if(viewer){viewer.style.opacity="0";viewer.style.visibility="hidden";}
+  status.textContent="Solicitando permiso de cámara…";
+  const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}}});
+  if(requestVersion!==cameraRequestVersion||$("tacticalCameraVideo")!==video){stream.getTracks().forEach(t=>t.stop());return;}
+  tacticalCameraStream=stream;video.srcObject=stream;video.style.display="block";await video.play();
+  if(requestVersion!==cameraRequestVersion)return;
+  tacticalEnableDirection(true).then(()=>{const b=$("tacticalCompassPermission");if(b&&requestVersion===cameraRequestVersion)b.style.display=tacticalCompassPermissionNeeded?"block":"none";});
   tacticalCameraRefreshTimer=setInterval(tacticalUpdateCameraTarget,1000);
-  if(tacticalTarget&&navigator.geolocation){tacticalGeoWatch=navigator.geolocation.watchPosition(p=>{if(tacticalTarget){tacticalTarget.lat=p.coords.latitude;tacticalTarget.lon=p.coords.longitude;tacticalTarget.accuracy=p.coords.accuracy;tacticalLastGoodFix=Date.now();tacticalUpdateDirection();}},()=>{},{enableHighAccuracy:true,maximumAge:3000,timeout:15000});} const viewer=$("arModelViewer");if(viewer){viewer.style.cssText="position:absolute;inset:0;width:100%;height:100%;z-index:4;background:transparent;border:0;pointer-events:none;opacity:0;visibility:hidden";viewer.removeAttribute("poster");viewer.setAttribute("reveal","auto");}
+  if(tacticalTarget&&navigator.geolocation){tacticalGeoWatch=navigator.geolocation.watchPosition(p=>{if(requestVersion===cameraRequestVersion&&tacticalTarget){tacticalTarget.lat=p.coords.latitude;tacticalTarget.lon=p.coords.longitude;tacticalTarget.accuracy=p.coords.accuracy;tacticalLastGoodFix=Date.now();if(status.textContent==="Buscando señal GPS…"||status.textContent.startsWith("GPS no disponible:"))status.textContent="";tacticalUpdateDirection();}},e=>{if(requestVersion===cameraRequestVersion&&!tacticalLastGoodFix)status.textContent="GPS no disponible: "+e.message;},{enableHighAccuracy:true,maximumAge:3000,timeout:15000});}if(viewer){viewer.style.cssText="position:absolute;inset:0;width:100%;height:100%;z-index:4;background:transparent;border:0;pointer-events:none;opacity:0;visibility:hidden";viewer.removeAttribute("poster");viewer.setAttribute("reveal","auto");}
   loadTacticalModelViewer().catch(e=>{status.textContent="Error al preparar visor 3D: "+e.message;});
   const activeViewer=$("arModelViewer");if(activeViewer){activeViewer.addEventListener("error",()=>{status.textContent="No se pudo cargar el modelo 3D. Revisa la conexión y el archivo del objetivo.";},{once:true});activeViewer.addEventListener("load",()=>{tacticalUpdateCameraTarget();},{once:true});}
   tacticalUpdateCameraTarget();
-  status.textContent="BÚSQUEDA GPS: la cámara muestra el entorno y el rumbo al punto del administrador. La caja aparecerá al acercarte a 12 m con precisión GPS de hasta 45 m; permanecerá visible mientras sigas cerca para evitar parpadeos en la cámara. Es una referencia visual de la misión y NO está anclado al punto físico exacto; bajo árboles la precisión puede empeorar.";
- }catch(e){status.textContent="No se pudo activar la cámara: "+e.message+". Revisa el permiso de cámara en Chrome.";stopTacticalCamera();}
+  status.textContent=tacticalLastGoodFix?"":"Buscando señal GPS…";
+ }catch(e){if(requestVersion!==cameraRequestVersion)return;stopTacticalCamera();status.textContent="No se pudo abrir la cámara. Revisa el permiso y vuelve a pulsar Buscar objetivo asignado.";loadTacticalModelViewer().catch(()=>{});}
 }
 function stopTacticalCamera(){
+ ++cameraRequestVersion;
+ const tap=$("tacticalTapCapture");if(tap)tap.style.display="none";
  if(tacticalCameraRefreshTimer!==null){clearInterval(tacticalCameraRefreshTimer);tacticalCameraRefreshTimer=null;}
  if(tacticalGeoWatch!==null&&navigator.geolocation){navigator.geolocation.clearWatch(tacticalGeoWatch);tacticalGeoWatch=null;}
  if(tacticalCameraStream){tacticalCameraStream.getTracks().forEach(t=>t.stop());tacticalCameraStream=null;}
@@ -769,7 +764,8 @@ async function enableTacticalCompass(){
 function metersBetween(a,b){const rad=Math.PI/180,dlat=(b[0]-a[0])*rad,dlon=(b[1]-a[1])*rad,h=Math.sin(dlat/2)**2+Math.cos(a[0]*rad)*Math.cos(b[0]*rad)*Math.sin(dlon/2)**2;return 12742000*Math.asin(Math.min(1,Math.sqrt(h)));}
 function updateGpsNavigation(objectives){
  const box=$("gpsNavigation");if(!box)return;
- if(!myGps){box.textContent="Pulsa COMPARTIR MI UBICACIÓN para localizarte y ver la distancia al objetivo.";return;}
+ if(!myGps){box.hidden=true;return;}
+ box.hidden=false;
  const valid=objectives.filter(x=>Number.isFinite(Number(x.latitude))&&Number.isFinite(Number(x.longitude)));
  if(!valid.length){box.textContent="Tu ubicación GPS está activa. No hay objetivos con coordenadas disponibles.";return;}
  const nearest=valid.map(x=>({...x,distance:metersBetween(myGps,[Number(x.latitude),Number(x.longitude)])})).sort((a,b)=>a.distance-b.distance)[0];
@@ -861,12 +857,13 @@ let tacticalCameraCapturing=false;
 async function captureTacticalCameraObjective(){
  if(tacticalCameraCapturing||!tacticalTarget?.objectiveId||!tacticalModelArrived)return;
  tacticalCameraCapturing=true;
- const id=tacticalTarget.objectiveId,notice=$("tacticalCameraCaptureStatus"),tap=$("tacticalTapCapture");
+ const captureVersion=cameraRequestVersion,id=tacticalTarget.objectiveId,notice=$("tacticalCameraCaptureStatus"),tap=$("tacticalTapCapture");
  if(tap)tap.style.display="none";
  if(notice){notice.style.display="block";notice.textContent="⏳ Verificando captura GPS...";}
  const success=await captureVirtualObjective(id);
+ if(captureVersion!==cameraRequestVersion){tacticalCameraCapturing=false;tacticalUpdateCameraTarget();return;}
  if(notice){notice.textContent=success?"✅ ¡OBJETIVO CAPTURADO!":"⚠️ Captura no completada. Revisa el mensaje GPS e inténtalo nuevamente.";}
- if(success){tacticalModelArrived=false;const viewer=$("arModelViewer");if(viewer){viewer.style.opacity="0";viewer.style.visibility="hidden";}setTimeout(()=>{stopTacticalCamera();},1300);}
+ if(success){tacticalModelArrived=false;const viewer=$("arModelViewer");if(viewer){viewer.style.opacity="0";viewer.style.visibility="hidden";}setTimeout(()=>{if(captureVersion===cameraRequestVersion)closePlayerCamera();},1300);}
  tacticalCameraCapturing=false;
  if(!success)tacticalUpdateCameraTarget();
 }
