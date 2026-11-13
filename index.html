@@ -564,7 +564,7 @@ async function loadPlayerMap(fitView=true){
  gpsObjectives=objectives;const pts=[...objectives.filter(x=>x.latitude!=null&&x.longitude!=null).map(x=>[Number(x.latitude),Number(x.longitude)]),...locs.map(x=>[Number(x.latitude),Number(x.longitude)])];
  if(myGps)pts.push(myGps);
  if(!mapPlayer){mapPlayer=L.map("playerMap").setView(pts.length?pts[0]:[4.65,-74.1],pts.length?14:5);setTacticalMapLayer(tacticalSatellite);}
- else {mapPlayer.eachLayer(layer=>{if(layer instanceof L.Marker||layer instanceof L.Circle||layer instanceof L.Polyline)mapPlayer.removeLayer(layer);});gpsLiveMarker=null;gpsLiveLine=null;}
+ else {mapPlayer.eachLayer(layer=>{if(layer instanceof L.Marker||layer instanceof L.CircleMarker||layer instanceof L.Polyline)mapPlayer.removeLayer(layer);});gpsLiveMarker=null;gpsLiveLine=null;}
  objectives.filter(x=>x.latitude!=null&&x.longitude!=null).forEach(x=>L.marker([Number(x.latitude),Number(x.longitude)]).addTo(mapPlayer).bindPopup("Objetivo: "+escapeHtml(x.name)));
  locs.filter(x=>x.user_id!==currentUser.id).forEach(x=>L.circleMarker([Number(x.latitude),Number(x.longitude)],{radius:6,color:"#9dd9ff",weight:2,fillColor:"#1e5e94",fillOpacity:.8}).addTo(mapPlayer).bindPopup("Compañero: "+escapeHtml(names.get(x.user_id)||"Operador")));
  if(!myGps){const own=locs.find(x=>x.user_id===currentUser.id);if(own)myGps=[Number(own.latitude),Number(own.longitude)];}
