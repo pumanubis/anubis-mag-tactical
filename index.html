@@ -416,6 +416,7 @@ function tacticalUpdateCameraTarget(){
  const arrived=tacticalModelArrived&&freshFix&&distance<7;
  viewer.style.opacity=arrived?"1":"0";viewer.style.visibility=arrived?"visible":"hidden";
  viewer.style.transform="none";
+ const tap=$("tacticalTapCapture");if(tap)tap.style.display=arrived&&!tacticalCameraCapturing?"block":"none";
  const marker=$("tacticalGpsSight");
  if(marker){marker.style.display=!arrived&&delta!==null&&Math.abs(delta)<=40?"block":"none";if(delta!==null)marker.style.left=(50+delta/40*43)+"%";marker.textContent="◇ OBJETIVO A "+Math.round(distance)+" m";}
  const uncertainty=$("tacticalGpsUncertainty");
@@ -457,9 +458,9 @@ async function showAR(url,name,objectiveId){
   // Permitir abrir la cámara durante la aproximación; el modelo se revela únicamente al llegar.
   if(distance>radius)$("arLoadStatus").textContent="Aún fuera de la zona de misión: "+distance+" m. Puedes abrir la cámara para seguir el rumbo, pero la caja seguirá oculta hasta llegar al punto GPS.";
   tacticalModelArrived=false;tacticalLastGoodFix=0;
-  tacticalTarget={lat:p.coords.latitude,lon:p.coords.longitude,goalLat:Number(objective.latitude),goalLon:Number(objective.longitude),radius:Number(objective.radius_m||35),accuracy:p.coords.accuracy};tacticalHeading=null;
+  tacticalTarget={objectiveId:objectiveId,lat:p.coords.latitude,lon:p.coords.longitude,goalLat:Number(objective.latitude),goalLon:Number(objective.longitude),radius:Number(objective.radius_m||35),accuracy:p.coords.accuracy};tacticalHeading=null;
   $("arLoadStatus").textContent="Dentro de la zona asignada: "+distance+" m del punto (precisión GPS ±"+accuracy+" m). El GPS confirma la zona, no la posición exacta del objeto en la imagen. "+modeMessage;
-  $("arSearchContent").innerHTML='<div id="tacticalCameraStage" style="position:relative;height:380px;background:#273424;border-radius:12px;overflow:hidden"><div id="tacticalGpsSight" style="display:none;position:absolute;top:43%;left:50%;transform:translateX(-50%);z-index:5;padding:9px 12px;background:rgba(0,0,0,.68);border:2px solid #e9c46a;color:#ffe7a2;border-radius:8px;font-weight:bold;white-space:nowrap;pointer-events:none">◇ OBJETIVO GPS</div><div id="tacticalGpsUncertainty" style="display:none;position:absolute;bottom:8px;left:8px;right:8px;z-index:5;padding:7px;background:rgba(0,0,0,.65);color:#fff;text-align:center;font-size:12px;pointer-events:none"></div><video id="tacticalCameraVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:2"></video><model-viewer id="arModelViewer" src="'+escapeHtml(decodeURIComponent(url))+'" ar ar-modes="webxr scene-viewer quick-look" ar-placement="floor" ar-scale="fixed" scale="0.65 0.65 0.65" camera-controls shadow-intensity="1" shadow-softness="0.8" exposure="1.5" environment-image="neutral" camera-orbit="30deg 68deg 350%" field-of-view="30deg" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:transparent" alt="Modelo 3D del objetivo"></model-viewer></div><p class="small">RA espacial opcional: coloca el objeto en una superficie detectada. No está fijado a las coordenadas GPS del administrador; utiliza la brújula del mapa táctico para orientarte hacia ese punto.</p><div id="tacticalDirection" class="small">Rumbo al objetivo GPS</div><div class="actions"><button class="secondary" onclick="tacticalCalibrateHeading()">🧭 CALIBRAR MIRANDO AL PUNTO CONOCIDO</button><button class="secondary" onclick="tacticalResetHeading()">RESTABLECER BRÚJULA</button></div><p class="small">Calibra solo si sabes dónde está físicamente el punto marcado por el administrador. No corrige errores de GPS.</p><button onclick="launchNativeTacticalAR()">🥽 VER EN RA ESPACIAL (COLOCAR EN SUELO)</button><button id="tacticalCompassPermission" style="display:none" onclick="tacticalEnableDirection()">🧭 PERMITIR SENSOR (REQUERIDO POR iOS)</button><button onclick="launchTacticalAR()">📷 VER OBJETIVO VIRTUAL EN CÁMARA</button><button onclick="captureVirtualObjective(\''+objectiveId+'\')">🎯 SOLICITAR CAPTURA GPS</button><button class="secondary" onclick="stopTacticalCamera()">CERRAR CÁMARA</button>';
+  $("arSearchContent").innerHTML='<div id="tacticalCameraStage" style="position:relative;height:380px;background:#273424;border-radius:12px;overflow:hidden"><button id="tacticalTapCapture" onclick="captureTacticalCameraObjective()" style="display:none;position:absolute;left:15%;top:27%;width:70%;height:46%;z-index:8;background:rgba(213,189,104,.14);border:2px dashed #d5bd68;color:#fff7d1;font-weight:800;text-shadow:0 2px 5px #000;cursor:pointer">🎯 TOCA PARA CAPTURAR</button><div id="tacticalCameraCaptureStatus" style="display:none;position:absolute;top:6px;left:5%;width:90%;z-index:9;background:#182719ed;color:white;padding:10px;border-radius:8px;text-align:center;font-weight:bold"></div><div id="tacticalGpsSight" style="display:none;position:absolute;top:43%;left:50%;transform:translateX(-50%);z-index:5;padding:9px 12px;background:rgba(0,0,0,.68);border:2px solid #e9c46a;color:#ffe7a2;border-radius:8px;font-weight:bold;white-space:nowrap;pointer-events:none">◇ OBJETIVO GPS</div><div id="tacticalGpsUncertainty" style="display:none;position:absolute;bottom:8px;left:8px;right:8px;z-index:5;padding:7px;background:rgba(0,0,0,.65);color:#fff;text-align:center;font-size:12px;pointer-events:none"></div><video id="tacticalCameraVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:2"></video><model-viewer id="arModelViewer" src="'+escapeHtml(decodeURIComponent(url))+'" ar ar-modes="webxr scene-viewer quick-look" ar-placement="floor" ar-scale="fixed" scale="0.65 0.65 0.65" camera-controls shadow-intensity="1" shadow-softness="0.8" exposure="1.5" environment-image="neutral" camera-orbit="30deg 68deg 350%" field-of-view="30deg" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:transparent" alt="Modelo 3D del objetivo"></model-viewer></div><p class="small">RA espacial opcional: coloca el objeto en una superficie detectada. No está fijado a las coordenadas GPS del administrador; utiliza la brújula del mapa táctico para orientarte hacia ese punto.</p><div id="tacticalDirection" class="small">Rumbo al objetivo GPS</div><div class="actions"><button class="secondary" onclick="tacticalCalibrateHeading()">🧭 CALIBRAR MIRANDO AL PUNTO CONOCIDO</button><button class="secondary" onclick="tacticalResetHeading()">RESTABLECER BRÚJULA</button></div><p class="small">Calibra solo si sabes dónde está físicamente el punto marcado por el administrador. No corrige errores de GPS.</p><button onclick="launchNativeTacticalAR()">🥽 VER EN RA ESPACIAL (COLOCAR EN SUELO)</button><button id="tacticalCompassPermission" style="display:none" onclick="tacticalEnableDirection()">🧭 PERMITIR SENSOR (REQUERIDO POR iOS)</button><button onclick="launchTacticalAR()">📷 VER OBJETIVO VIRTUAL EN CÁMARA</button><button onclick="captureVirtualObjective(\''+objectiveId+'\')">🎯 SOLICITAR CAPTURA GPS</button><button class="secondary" onclick="stopTacticalCamera()">CERRAR CÁMARA</button>';
   tacticalEnableDirection(true).then(()=>{const b=$("tacticalCompassPermission");if(b)b.style.display=tacticalCompassPermissionNeeded?"block":"none";});
   tacticalUpdateDirection();
   loadTacticalModelViewer().catch(e=>{$("arLoadStatus").textContent="No se pudo cargar el visor: "+e.message;});
@@ -648,19 +649,38 @@ async function startScanner(){
  try{scanner=new Html5Qrcode("reader");await scanner.start({facingMode:"environment"},{fps:10,qrbox:{width:240,height:240}},async text=>{await stopScanner();await captureObjective(text);},()=>{});}catch(e){msg("captureMsg","No se pudo abrir la cámara. Revisa el permiso del navegador.");}
 }
 async function stopScanner(){if(scanner){try{if(scanner.isScanning)await scanner.stop();await scanner.clear();}catch{}scanner=null;}}
+let tacticalCameraCapturing=false;
+async function captureTacticalCameraObjective(){
+ if(tacticalCameraCapturing||!tacticalTarget?.objectiveId||!tacticalModelArrived)return;
+ tacticalCameraCapturing=true;
+ const id=tacticalTarget.objectiveId,notice=$("tacticalCameraCaptureStatus"),tap=$("tacticalTapCapture");
+ if(tap)tap.style.display="none";
+ if(notice){notice.style.display="block";notice.textContent="⏳ Verificando captura GPS...";}
+ const success=await captureVirtualObjective(id);
+ if(notice){notice.textContent=success?"✅ ¡OBJETIVO CAPTURADO!":"⚠️ Captura no completada. Revisa el mensaje GPS e inténtalo nuevamente.";}
+ if(success){tacticalModelArrived=false;const viewer=$("arModelViewer");if(viewer){viewer.style.opacity="0";viewer.style.visibility="hidden";}setTimeout(()=>{stopTacticalCamera();},1300);}
+ tacticalCameraCapturing=false;
+ if(!success)tacticalUpdateCameraTarget();
+}
 async function captureVirtualObjective(id){
- if(!currentGame||currentGame.status!=="active"){msg("captureMsg","La partida debe estar activa.");return;}
- if(!navigator.onLine){msg("captureMsg","La captura virtual necesita conexión para validarse en el servidor.");return;}
- if(!navigator.geolocation){msg("captureMsg","GPS no disponible.");return;}
- msg("captureMsg","Verificando ubicación GPS y radio de captura...");
- navigator.geolocation.getCurrentPosition(async p=>{
-  const payload={game_id:currentGame.id,user_id:currentUser.id,latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy_m:p.coords.accuracy,updated_at:new Date().toISOString()};
-  const {error:locError}=await db.from("player_locations").upsert(payload,{onConflict:"game_id,user_id"});
-  if(locError){msg("captureMsg","No se pudo verificar tu ubicación: "+locError.message);return;}
-  const {data,error}=await db.rpc("capture_virtual_objective",{p_objective_id:id});
-  if(error||!data?.success){msg("captureMsg","Captura rechazada: "+(error?.message||"Verifica la distancia y la misión asignada."));return;}
-  msg("captureMsg","¡OBJETIVO VIRTUAL CAPTURADO! "+data.objective+" · "+data.distance_m+" m del punto GPS.");await loadPlayerGame();
- },e=>msg("captureMsg","No se pudo obtener GPS: "+e.message),{enableHighAccuracy:true,maximumAge:0,timeout:20000});
+ const report=(message)=>{msg("captureMsg",message);const el=$("tacticalCameraCaptureStatus");if(el&&tacticalCameraCapturing){el.style.display="block";el.textContent=message;}};
+ if(!currentGame||currentGame.status!=="active"){report("La partida debe estar activa.");return false;}
+ if(!navigator.onLine){report("La captura virtual necesita conexión para validarse en el servidor.");return false;}
+ if(!navigator.geolocation){report("GPS no disponible.");return false;}
+ report("Verificando ubicación GPS y radio de captura...");
+ return new Promise(resolve=>{
+  navigator.geolocation.getCurrentPosition(async p=>{
+   try{
+    const payload={game_id:currentGame.id,user_id:currentUser.id,latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy_m:p.coords.accuracy,updated_at:new Date().toISOString()};
+    const {error:locError}=await db.from("player_locations").upsert(payload,{onConflict:"game_id,user_id"});
+    if(locError){report("No se pudo verificar tu ubicación: "+locError.message);resolve(false);return;}
+    const {data,error}=await db.rpc("capture_virtual_objective",{p_objective_id:id});
+    if(error||!data?.success){report("Captura rechazada: "+(error?.message||"Verifica la distancia y la misión asignada."));resolve(false);return;}
+    report("¡OBJETIVO VIRTUAL CAPTURADO! "+data.objective+" · "+data.distance_m+" m del punto GPS.");
+    resolve(true);await loadPlayerGame();
+   }catch(e){report("Error al capturar: "+e.message);resolve(false);}
+  },e=>{report("No se pudo obtener GPS: "+e.message);resolve(false);},{enableHighAccuracy:true,maximumAge:0,timeout:20000});
+ });
 }
 async function captureObjective(raw){
  const hash=await sha256(raw),known=JSON.parse(localStorage.getItem("anubis_tokens_"+(currentGame?.id||""))||"[]"),objective=known.find(x=>x.token_hash===hash);
