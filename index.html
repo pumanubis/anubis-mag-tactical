@@ -459,7 +459,7 @@ async function launchNativeTacticalAR(){
  }catch(e){status.textContent="No se pudo iniciar RA espacial: "+(e.message||e)+". La vista de cámara normal sigue disponible.";}
 }
 let myGps=null,gpsWatchId=null,gpsLastSync=0,gpsLastMapRefresh=0,gpsLiveMarker=null,gpsLiveLine=null,gpsObjectives=[],gpsLiveBusy=false,gpsPollTimer=null,gpsPollBusy=false,gpsLastFixAt=0,gpsLastAccuracy=null;
-let tacticalSatellite=false,tacticalTileLayer=null,deviceHeading=null,compassEnabled=false,compassHandler=null,lastGpsPoint=null;
+let tacticalSatellite=false,tacticalTileLayer=null,deviceHeading=null,compassEnabled=false,compassHandler=null,lastGpsPoint=null,compassLastRender=0;
 function setTacticalMapLayer(satellite){tacticalSatellite=satellite;if(!mapPlayer||!window.L)return;if(tacticalTileLayer)mapPlayer.removeLayer(tacticalTileLayer);tacticalTileLayer=L.tileLayer(satellite?"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}":"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:satellite?"Imagery © Esri, Maxar, Earthstar Geographics":"© OpenStreetMap",maxZoom:19}).addTo(mapPlayer);tacticalTileLayer.bringToBack();}
 function compassBearing(a,b){const rad=Math.PI/180,dlon=(b[1]-a[1])*rad,y=Math.sin(dlon)*Math.cos(b[0]*rad),x=Math.cos(a[0]*rad)*Math.sin(b[0]*rad)-Math.sin(a[0]*rad)*Math.cos(b[0]*rad)*Math.cos(dlon);return(Math.atan2(y,x)*180/Math.PI+360)%360;}
 function refreshTacticalCompass(){const arrow=$("compassArrow"),info=$("compassInfo");if(!arrow||!info)return;if(!myGps||!gpsObjectives.length){info.textContent="Activa el GPS y selecciona un objetivo con coordenadas.";return;}const nearest=gpsObjectives.filter(o=>o.latitude!=null&&o.longitude!=null).map(o=>({name:o.name,pos:[Number(o.latitude),Number(o.longitude)]})).sort((a,b)=>metersBetween(myGps,a.pos)-metersBetween(myGps,b.pos))[0];if(!nearest)return;const bearing=compassBearing(myGps,nearest.pos);arrow.style.transform="rotate("+((bearing-(deviceHeading??0)+360)%360)+"deg)";info.textContent=nearest.name+" · Rumbo "+Math.round(bearing)+"° "+(deviceHeading===null?"respecto al norte; activa la brújula para orientación al girar el teléfono.":"· Flecha orientada según el teléfono.");}
@@ -468,7 +468,7 @@ function listenTacticalCompass(){
  if(compassHandler)window.removeEventListener("deviceorientation",compassHandler,true);
  compassHandler=e=>{
   const heading=typeof e.webkitCompassHeading==="number"?e.webkitCompassHeading:e.absolute===true&&typeof e.alpha==="number"?(360-e.alpha)%360:null;
-  if(heading!==null){deviceHeading=heading;compassEnabled=true;refreshTacticalCompass();}
+  if(heading!==null){deviceHeading=heading;compassEnabled=true;if(Date.now()-compassLastRender>180){compassLastRender=Date.now();refreshTacticalCompass();}}
  };
  window.addEventListener("deviceorientation",compassHandler,true);
  return true;
@@ -513,7 +513,7 @@ function pollLiveGps(){
 }
 async function applyLiveGpsFix(p){
  if(!currentGame||!currentUser)return;
- const stamp=p.timestamp||Date.now();if(stamp<gpsLastFixAt)return;gpsLastFixAt=stamp;gpsLastAccuracy=p.coords.accuracy;
+ const stamp=p.timestamp||Date.now();if(stamp<gpsLastFixAt)return;const incomingAccuracy=Number(p.coords.accuracy);if(!Number.isFinite(incomingAccuracy)||incomingAccuracy>100){const s=$("playerStatus");if(s)s.textContent="GPS impreciso (±"+Math.round(incomingAccuracy||0)+" m). Esperando mejor señal.";return;}if(myGps&&gpsLastAccuracy!=null&&incomingAccuracy>gpsLastAccuracy*2&&incomingAccuracy>25)return;gpsLastFixAt=stamp;gpsLastAccuracy=incomingAccuracy;
  myGps=[p.coords.latitude,p.coords.longitude];
  const liveBtn=$("gpsLiveBtn");if(liveBtn)liveBtn.textContent="DETENER GPS EN VIVO";
  updateGpsNavigation(gpsObjectives);
@@ -521,11 +521,11 @@ async function applyLiveGpsFix(p){
   if(!gpsLiveMarker)gpsLiveMarker=L.circleMarker(myGps,{radius:11,color:"#ffffff",weight:3,fillColor:"#1878f3",fillOpacity:1}).addTo(mapPlayer).bindPopup("Mi ubicación GPS en vivo");else gpsLiveMarker.setLatLng(myGps);
   const near=gpsObjectives.filter(x=>x.latitude!=null&&x.longitude!=null).map(x=>({p:[Number(x.latitude),Number(x.longitude)],d:metersBetween(myGps,[Number(x.latitude),Number(x.longitude)])})).sort((a,b)=>a.d-b.d)[0];
   if(gpsLiveLine){mapPlayer.removeLayer(gpsLiveLine);gpsLiveLine=null;}if(near)gpsLiveLine=L.polyline([myGps,near.p],{color:"#f1ca52",weight:3,dashArray:"7,7"}).addTo(mapPlayer);
-  if(!mapPlayer.getBounds().pad(-0.18).contains(myGps))mapPlayer.panTo(myGps);
+  /* No recentrar automáticamente el mapa: evita saltos visuales por variación GPS. */
  }
  const now=Date.now();
  if(now-gpsLastSync>=5000&&!gpsLiveBusy){gpsLastSync=now;gpsLiveBusy=true;const payload={game_id:currentGame.id,user_id:currentUser.id,latitude:myGps[0],longitude:myGps[1],accuracy_m:p.coords.accuracy,updated_at:new Date().toISOString()};try{if(navigator.onLine){const {error}=await db.from("player_locations").upsert(payload,{onConflict:"game_id,user_id"});if(error)msg("playerStatus","GPS activo; no se pudo compartir: "+error.message);else msg("playerStatus","GPS en vivo · Precisión aproximada: "+Math.round(p.coords.accuracy)+" m.");}else{localStorage.setItem("anubis_location_queue",JSON.stringify(payload));msg("playerStatus","GPS activo sin conexión; posición pendiente de sincronizar.");}}catch(e){msg("playerStatus","Error al sincronizar GPS: "+e.message);}finally{gpsLiveBusy=false;}}
- if(now-gpsLastMapRefresh>=15000){gpsLastMapRefresh=now;loadPlayerMap(false).catch(()=>{});}
+ if(now-gpsLastMapRefresh>=60000){gpsLastMapRefresh=now;loadPlayerMap(false).catch(()=>{});}
 }
 function toggleLiveGps(){
  if(gpsWatchId!==null){stopLiveGps();msg("playerStatus","Seguimiento GPS detenido.");return;}
@@ -561,7 +561,7 @@ async function loadPlayerMap(fitView=true){
  if(!mapPlayer){mapPlayer=L.map("playerMap").setView(pts.length?pts[0]:[4.65,-74.1],pts.length?14:5);setTacticalMapLayer(tacticalSatellite);}
  else {mapPlayer.eachLayer(layer=>{if(layer instanceof L.Marker||layer instanceof L.Circle||layer instanceof L.Polyline)mapPlayer.removeLayer(layer);});gpsLiveMarker=null;gpsLiveLine=null;}
  objectives.filter(x=>x.latitude!=null&&x.longitude!=null).forEach(x=>L.marker([Number(x.latitude),Number(x.longitude)]).addTo(mapPlayer).bindPopup("Objetivo: "+escapeHtml(x.name)));
- locs.filter(x=>x.user_id!==currentUser.id).forEach(x=>L.circleMarker([Number(x.latitude),Number(x.longitude)],{radius:8,color:"#8bb8e8"}).addTo(mapPlayer).bindPopup("Compañero: "+escapeHtml(names.get(x.user_id)||"Operador")));
+ locs.filter(x=>x.user_id!==currentUser.id).forEach(x=>L.circleMarker([Number(x.latitude),Number(x.longitude)],{radius:6,color:"#9dd9ff",weight:2,fillColor:"#1e5e94",fillOpacity:.8}).addTo(mapPlayer).bindPopup("Compañero: "+escapeHtml(names.get(x.user_id)||"Operador")));
  if(!myGps){const own=locs.find(x=>x.user_id===currentUser.id);if(own)myGps=[Number(own.latitude),Number(own.longitude)];}
  if(myGps){gpsLiveMarker=L.circleMarker(myGps,{radius:11,color:"#ffffff",weight:3,fillColor:"#1878f3",fillOpacity:1}).addTo(mapPlayer).bindPopup("Mi ubicación GPS");const near=objectives.filter(x=>x.latitude!=null&&x.longitude!=null).map(x=>({p:[Number(x.latitude),Number(x.longitude)],d:metersBetween(myGps,[Number(x.latitude),Number(x.longitude)])})).sort((a,b)=>a.d-b.d)[0];if(near)gpsLiveLine=L.polyline([myGps,near.p],{color:"#f1ca52",weight:3,dashArray:"7,7"}).addTo(mapPlayer);}
  updateGpsNavigation(objectives);
