@@ -86,7 +86,7 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 <div class="panel"><h2>ASIGNAR OBJETIVOS</h2><label>Jugador</label><select id="assignPlayer"></select><label>Objetivos</label><div id="assignObjectives" class="muted"></div><label><input id="assignSecret" type="checkbox" style="width:auto"> Marcar como misión secreta</label><button onclick="assignObjectives()">ASIGNAR MISIONES</button><p id="assignMsg" class="status hidden"></p><div id="assignedMissions"></div></div>
 <div class="panel"><h2>MAPA DE OPERACIONES</h2><div class="actions"><button class="secondary" onclick="setAdminSatellite(false)">MAPA NORMAL</button><button onclick="setAdminSatellite(true)">SATÉLITE</button></div><div id="adminMap"></div><p class="small">Los marcadores representan objetivos con coordenadas GPS. Desde el computador, arrastra un marcador hasta el lugar deseado. Después confirma con GUARDAR NUEVA UBICACIÓN. También puedes hacer clic en un marcador para editarlo.</p></div>
 </div>
-<div class="panel"><h2>REGISTRO DE CAPTURAS</h2><button class="secondary" onclick="loadAdminCaptureHistory()">ACTUALIZAR CAPTURAS</button><div id="adminCaptureHistory" class="small">Abre una operación para consultar las capturas.</div></div>
+<div class="panel"><h2>RESULTADOS DE LA OPERACIÓN</h2><p class="small">Solo capturas de la partida seleccionada. Las pruebas de otras partidas no se mezclan.</p><button class="secondary" onclick="loadAdminCaptureHistory()">ACTUALIZAR RESULTADOS</button><div id="adminCaptureHistory" class="small">Abre una operación para consultar sus resultados.</div></div>
 <div class="panel"><h2>OBJETIVOS CREADOS</h2><label><input type="checkbox" id="showCapturedObjectives" style="width:auto" onchange="renderAdminObjectivesList()"> MOSTRAR OBJETIVOS CAPTURADOS (HISTORIAL)</label><div id="objectivesList"></div><div id="editObjectivePanel" class="card hidden"><h2>EDITAR UBICACIÓN DEL OBJETIVO</h2><p id="editObjectiveName" class="gold"></p><p class="small">Escribe coordenadas o toca un punto del mapa de operaciones. El QR y las asignaciones se conservarán.</p><div class="row"><div><label>Latitud</label><input id="editObjLat" type="number" step="any"></div><div><label>Longitud</label><input id="editObjLng" type="number" step="any"></div></div><div class="actions"><button class="secondary" onclick="useCurrentPosition('editObjLat','editObjLng')">USAR MI GPS</button><button onclick="saveObjectiveLocation()">GUARDAR NUEVA UBICACIÓN</button><button class="secondary" onclick="cancelObjectiveLocation()">CANCELAR</button></div><p id="editObjectiveStatus" class="small"></p></div></div>
 </div>
 </section>
@@ -237,12 +237,16 @@ async function assignObjectives(){
 }
 async function loadAdminCaptureHistory(){
  const el=$("adminCaptureHistory");if(!el||!currentGame)return;
- el.textContent="Consultando capturas...";
+ el.textContent="Consultando resultados...";
  const gameId=currentGame.id;
  const {data,error}=await db.rpc("admin_capture_history",{p_game_id:gameId});
  if(!currentGame||currentGame.id!==gameId)return;
- if(error){el.textContent="No se pudo consultar el historial: "+error.message;return;}
- el.innerHTML=data?.length?data.map(x=>'<div class="card"><b>'+escapeHtml(x.objective_name||"Objetivo")+'</b><div>Jugador: '+escapeHtml(x.player_callsign||"Sin indicativo")+'</div><div>Equipo: '+escapeHtml(x.team_name||"Sin equipo")+'</div><div>Método: '+escapeHtml(x.capture_method==="gps"?"GPS / objetivo virtual":"QR")+'</div><div>Fecha y hora: '+escapeHtml(new Date(x.captured_at).toLocaleString("es-CO",{timeZone:"America/Bogota"}))+'</div></div>').join(""):"Todavía no hay capturas registradas en esta operación.";
+ if(error){el.textContent="No se pudieron consultar los resultados: "+error.message;return;}
+ if(!data?.length){el.textContent="Esta operación todavía no tiene capturas registradas.";return;}
+ const totals={};data.forEach(x=>{const team=x.team_name||"Sin equipo";totals[team]=(totals[team]||0)+1;});
+ const summary=Object.entries(totals).sort((a,b)=>b[1]-a[1]).map(([team,n])=>'<span class="tag" style="margin:3px">'+escapeHtml(team)+': '+n+' objetivo(s)</span>').join("");
+ const rows=data.map(x=>'<tr><td>'+escapeHtml(new Date(x.captured_at).toLocaleString("es-CO",{timeZone:"America/Bogota",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}))+'</td><td>'+escapeHtml(x.objective_name||"Objetivo")+'</td><td>'+escapeHtml(x.player_callsign||"Sin indicativo")+'</td><td>'+escapeHtml(x.team_name||"Sin equipo")+'</td><td>'+escapeHtml(x.capture_method==="gps"?"GPS":"QR")+'</td></tr>').join("");
+ el.innerHTML='<p><b>'+data.length+' captura(s) en esta operación</b></p><div>'+summary+'</div><div style="overflow-x:auto;margin-top:12px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Fecha / hora</th><th>Objetivo</th><th>Jugador</th><th>Equipo</th><th>Método</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 async function loadAssignedMissions(){
  const {data,error}=await db.from("objective_assignments").select("id,player_id,objective_id,status,is_secret,unlocked_at").eq("game_id",currentGame.id).order("assigned_at",{ascending:false});
