@@ -332,6 +332,7 @@ function renderPlayerSnapshot(snap,offline){
  $("arArea").textContent="Los modelos 3D se abrirán aquí cuando una misión tenga un archivo GLB/GLTF configurado por el administrador.";
 }
 let tacticalCameraStream=null;
+let tacticalModelArrived=false,tacticalLastGoodFix=0;
 let tacticalTarget=null,tacticalHeading=null,tacticalOrientationListener=null,tacticalGeoWatch=null,tacticalCompassPermissionNeeded=false,tacticalHeadingRaw=null,tacticalHeadingSource="",tacticalHeadingOffset=0,tacticalAbsoluteLast=0;
 function tacticalBearing(a,b,c,d){const R=Math.PI/180,delta=(d-b)*R,y=Math.sin(delta)*Math.cos(c*R),x=Math.cos(a*R)*Math.sin(c*R)-Math.sin(a*R)*Math.cos(c*R)*Math.cos(delta);return(Math.atan2(y,x)*180/Math.PI+360)%360;}
 function tacticalCalibrateHeading(){
@@ -351,13 +352,16 @@ function tacticalUpdateCameraTarget(){
  const accuracy=Number(t.accuracy)||Infinity;
  const delta=tacticalHeading==null?null:((bearing-tacticalHeading+540)%360)-180;
  // Umbral de llegada de 8 m; GPS bajo árboles puede ser insuficiente.
- const arrived=distance<=8&&accuracy<=25;
+ // Histéresis: evita parpadeo por saltos normales de GPS bajo árboles.
+ const fixOk=accuracy>0&&accuracy<=45;
+ if(fixOk){tacticalLastGoodFix=Date.now();if(!tacticalModelArrived&&distance<=12)tacticalModelArrived=true;else if(tacticalModelArrived&&distance>=25)tacticalModelArrived=false;}
+ const arrived=tacticalModelArrived&&Date.now()-tacticalLastGoodFix<30000;
  viewer.style.opacity=arrived?"1":"0";viewer.style.visibility=arrived?"visible":"hidden";
  viewer.style.transform="none";
  const marker=$("tacticalGpsSight");
  if(marker){marker.style.display=!arrived&&delta!==null&&Math.abs(delta)<=40?"block":"none";if(delta!==null)marker.style.left=(50+delta/40*43)+"%";marker.textContent="◇ OBJETIVO A "+Math.round(distance)+" m";}
  const uncertainty=$("tacticalGpsUncertainty");
- if(uncertainty){uncertainty.style.display="block";uncertainty.textContent="Distancia "+Math.round(distance)+" m · GPS ±"+(Number.isFinite(accuracy)?Math.round(accuracy):"?")+" m · "+(arrived?"LLEGASTE: MODELO VIRTUAL DE REFERENCIA":"CAJA OCULTA HASTA LLEGAR (≤8 m, precisión ≤25 m)");}
+ if(uncertainty){uncertainty.style.display="block";uncertainty.textContent="Distancia "+Math.round(distance)+" m · GPS ±"+(Number.isFinite(accuracy)?Math.round(accuracy):"?")+" m · "+(arrived?"LLEGASTE: MODELO VIRTUAL DE REFERENCIA":"ACÉRCATE AL OBJETIVO (se activa a ≤12 m; GPS ±45 m máximo)");}
  if(direction)direction.textContent=arrived
  ?"📦 Llegaste al punto GPS estimado: caja virtual visible. No está anclada físicamente al terreno."
  :"🧭 Sigue hacia el punto del administrador: "+Math.round(distance)+" m · rumbo "+Math.round(bearing)+"°"+(delta===null?"":Math.abs(delta)<25?" · AL FRENTE":delta>0?" · DERECHA "+Math.round(delta)+"°":" · IZQUIERDA "+Math.round(-delta)+"°");
@@ -394,6 +398,7 @@ async function showAR(url,name,objectiveId){
   const radius=Number(objective.radius_m||35),accuracy=Math.round(p.coords.accuracy);
   // Permitir abrir la cámara durante la aproximación; el modelo se revela únicamente al llegar.
   if(distance>radius)$("arLoadStatus").textContent="Aún fuera de la zona de misión: "+distance+" m. Puedes abrir la cámara para seguir el rumbo, pero la caja seguirá oculta hasta llegar al punto GPS.";
+  tacticalModelArrived=false;tacticalLastGoodFix=0;
   tacticalTarget={lat:p.coords.latitude,lon:p.coords.longitude,goalLat:Number(objective.latitude),goalLon:Number(objective.longitude),radius:Number(objective.radius_m||35),accuracy:p.coords.accuracy};tacticalHeading=null;
   $("arLoadStatus").textContent="Dentro de la zona asignada: "+distance+" m del punto (precisión GPS ±"+accuracy+" m). El GPS confirma la zona, no la posición exacta del objeto en la imagen. "+modeMessage;
   $("arSearchContent").innerHTML='<div id="tacticalCameraStage" style="position:relative;height:380px;background:#273424;border-radius:12px;overflow:hidden"><div id="tacticalGpsSight" style="display:none;position:absolute;top:43%;left:50%;transform:translateX(-50%);z-index:5;padding:9px 12px;background:rgba(0,0,0,.68);border:2px solid #e9c46a;color:#ffe7a2;border-radius:8px;font-weight:bold;white-space:nowrap;pointer-events:none">◇ OBJETIVO GPS</div><div id="tacticalGpsUncertainty" style="display:none;position:absolute;bottom:8px;left:8px;right:8px;z-index:5;padding:7px;background:rgba(0,0,0,.65);color:#fff;text-align:center;font-size:12px;pointer-events:none"></div><video id="tacticalCameraVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:2"></video><model-viewer id="arModelViewer" src="'+escapeHtml(decodeURIComponent(url))+'" ar ar-modes="webxr scene-viewer quick-look" ar-placement="floor" ar-scale="fixed" scale="0.65 0.65 0.65" camera-controls shadow-intensity="1" shadow-softness="0.8" exposure="1.5" environment-image="neutral" camera-orbit="30deg 68deg 350%" field-of-view="30deg" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:transparent" alt="Modelo 3D del objetivo"></model-viewer></div><p class="small">RA espacial opcional: coloca el objeto en una superficie detectada. No está fijado a las coordenadas GPS del administrador; utiliza la brújula del mapa táctico para orientarte hacia ese punto.</p><div id="tacticalDirection" class="small">Rumbo al objetivo GPS</div><div class="actions"><button class="secondary" onclick="tacticalCalibrateHeading()">🧭 CALIBRAR MIRANDO AL PUNTO CONOCIDO</button><button class="secondary" onclick="tacticalResetHeading()">RESTABLECER BRÚJULA</button></div><p class="small">Calibra solo si sabes dónde está físicamente el punto marcado por el administrador. No corrige errores de GPS.</p><button onclick="launchNativeTacticalAR()">🥽 VER EN RA ESPACIAL (COLOCAR EN SUELO)</button><button id="tacticalCompassPermission" style="display:none" onclick="tacticalEnableDirection()">🧭 PERMITIR SENSOR (REQUERIDO POR iOS)</button><button onclick="launchTacticalAR()">📷 VER OBJETIVO VIRTUAL EN CÁMARA</button><button onclick="captureVirtualObjective(\''+objectiveId+'\')">🎯 SOLICITAR CAPTURA GPS</button><button class="secondary" onclick="stopTacticalCamera()">CERRAR CÁMARA</button>';
@@ -429,10 +434,10 @@ async function launchTacticalAR(){
   video.srcObject=tacticalCameraStream;video.style.display="block";await video.play();
   tacticalEnableDirection(true);
   if(tacticalTarget&&navigator.geolocation){tacticalGeoWatch=navigator.geolocation.watchPosition(p=>{if(tacticalTarget){tacticalTarget.lat=p.coords.latitude;tacticalTarget.lon=p.coords.longitude;tacticalTarget.accuracy=p.coords.accuracy;tacticalUpdateDirection();}},()=>{},{enableHighAccuracy:true,maximumAge:3000,timeout:15000});} const viewer=$("arModelViewer");if(viewer){viewer.style.cssText="position:absolute;inset:0;width:100%;height:100%;z-index:4;background:transparent;border:0;pointer-events:none;opacity:0;visibility:hidden";viewer.removeAttribute("poster");viewer.setAttribute("reveal","auto");}
-  await loadTacticalModelViewer();
+  loadTacticalModelViewer().catch(e=>{status.textContent="Error al preparar visor 3D: "+e.message;});
   const activeViewer=$("arModelViewer");if(activeViewer){activeViewer.addEventListener("error",()=>{status.textContent="No se pudo cargar el modelo 3D. Revisa la conexión y el archivo del objetivo.";},{once:true});activeViewer.addEventListener("load",()=>{tacticalUpdateCameraTarget();},{once:true});}
   tacticalUpdateCameraTarget();
-  status.textContent="BÚSQUEDA GPS: la cámara muestra el entorno y el rumbo al punto del administrador. Solo cuando estés a 8 m o menos del punto y el GPS tenga precisión de 25 m o mejor aparecerá la caja 3D en la cámara. Es una referencia visual de la misión y NO está anclado al punto físico exacto; bajo árboles la precisión puede empeorar.";
+  status.textContent="BÚSQUEDA GPS: la cámara muestra el entorno y el rumbo al punto del administrador. La caja aparecerá al acercarte a 12 m con precisión GPS de hasta 45 m; permanecerá visible mientras sigas cerca para evitar parpadeos en la cámara. Es una referencia visual de la misión y NO está anclado al punto físico exacto; bajo árboles la precisión puede empeorar.";
  }catch(e){status.textContent="No se pudo activar la cámara: "+e.message+". Revisa el permiso de cámara en Chrome.";stopTacticalCamera();}
 }
 function stopTacticalCamera(){
