@@ -315,6 +315,47 @@ function renderAdminMap(){
   L.circle([o.latitude,o.longitude],{radius:Number(o.radius_m)||35,color:o.objective_type==="virtual"?"#d5bd68":"#71864a",interactive:false}).addTo(mapAdmin);
  });updateAdminEditMarker();setTimeout(()=>mapAdmin.invalidateSize(),200);
 }
+let tacticalCapturePoll=null,tacticalCaptureChannel=null,tacticalCaptureBusy=false,tacticalCaptureGameId=null;
+const tacticalCaptureSeen=new Map();
+function tacticalCaptureNotice(message){
+ let el=$("tacticalCaptureNotice");
+ if(!el){el=document.createElement("div");el.id="tacticalCaptureNotice";el.style.cssText="position:fixed;top:12px;left:5%;width:90%;z-index:99999;background:#40251c;color:#fff2d2;border:2px solid #d5bd68;padding:16px;border-radius:12px;box-shadow:0 8px 28px #000b;text-align:center;font-weight:bold";document.body.appendChild(el);}
+ el.innerHTML='<div>'+escapeHtml(message)+'</div><button style="margin-top:10px" onclick="this.parentElement.remove()">ENTENDIDO</button>';
+ try{if(navigator.vibrate)navigator.vibrate([180,100,180]);}catch(e){}
+}
+async function tacticalCheckCapturedObjectives(){
+ if(tacticalCaptureBusy||!navigator.onLine||!currentUser||currentProfile?.role!=="player"||!currentGame?.id)return;
+ tacticalCaptureBusy=true;
+ try{
+  const gameId=currentGame.id;
+  const {data,error}=await db.from("objectives").select("id,name,status,controlling_team_id").eq("game_id",gameId);
+  if(error||!data||currentGame?.id!==gameId)return;
+  const snap=JSON.parse(localStorage.getItem("anubis_player_"+currentUser.id)||"null");
+  const teamId=snap?.gp?.team_id;
+  let changed=false;
+  for(const obj of data){
+   const key=gameId+":"+obj.id,previous=tacticalCaptureSeen.get(key);
+   if(previous==="available"&&obj.status==="captured"){
+    const rival=obj.controlling_team_id&&obj.controlling_team_id!==teamId;
+    tacticalCaptureNotice((rival?"⚠️ OBJETIVO PERDIDO: ":"🎯 OBJETIVO CAPTURADO: ")+obj.name+(rival?" · El equipo rival llegó primero.":" · Ya no está disponible."));
+    changed=true;
+    if(tacticalTarget?.objectiveId===obj.id||tacticalTarget?.id===obj.id){tacticalModelArrived=false;stopTacticalCamera();const s=$("arLoadStatus");if(s)s.textContent="Objetivo capturado: cámara desactivada.";}
+   }
+   tacticalCaptureSeen.set(key,obj.status);
+  }
+  if(changed)await loadPlayerGame();
+ }catch(e){console.warn("Aviso de capturas:",e);}finally{tacticalCaptureBusy=false;}
+}
+function tacticalWatchCaptures(gameId){
+ if(!gameId||currentProfile?.role!=="player")return;
+ if(tacticalCaptureGameId===gameId&&tacticalCapturePoll)return;
+ if(tacticalCapturePoll)clearInterval(tacticalCapturePoll);
+ if(tacticalCaptureChannel){db.removeChannel(tacticalCaptureChannel);tacticalCaptureChannel=null;}
+ tacticalCaptureGameId=gameId;tacticalCaptureSeen.clear();
+ tacticalCapturePoll=setInterval(tacticalCheckCapturedObjectives,8000);
+ tacticalCheckCapturedObjectives();
+ try{tacticalCaptureChannel=db.channel("tactical-captures-"+gameId).on("postgres_changes",{event:"UPDATE",schema:"public",table:"objectives",filter:"game_id=eq."+gameId},()=>tacticalCheckCapturedObjectives()).subscribe();}catch(e){console.warn("Realtime no disponible; sigue consulta periódica.",e);}
+}
 async function loadPlayerGame(){
  if(!navigator.onLine){
   const snap=JSON.parse(localStorage.getItem("anubis_player_"+currentUser.id)||"null");
@@ -335,7 +376,7 @@ async function loadPlayerGame(){
  const snap={gp,game:g.data,team:t.data,assignments:a.data||[],objectives:o.data||[]};
  localStorage.setItem("anubis_player_"+currentUser.id,JSON.stringify(snap));
  localStorage.setItem("anubis_tokens_"+gp.game_id,JSON.stringify((o.data||[]).filter(x=>x.token_hash).map(x=>({id:x.id,name:x.name,token_hash:x.token_hash,status:x.status}))));
- renderPlayerSnapshot(snap,false);await loadPlayerMap();
+ renderPlayerSnapshot(snap,false);tacticalWatchCaptures(gp.game_id);await loadPlayerMap();
 }
 function renderPlayerSnapshot(snap,offline){
  const gp=snap.gp,g=snap.game,t=snap.team,assignments=snap.assignments||[];
