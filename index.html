@@ -352,15 +352,15 @@ function tacticalUpdateCameraTarget(){
  const delta=tacticalHeading==null?null:((bearing-tacticalHeading+540)%360)-180;
  const near=distance<=Math.max(10,Number(t.radius)||35);
  const validFix=accuracy>0&&accuracy<=60;
- const showModel=near&&validFix;
+ const showModel=near;
  viewer.style.opacity=showModel?"1":"0";
  viewer.style.transform="none";
  const marker=$("tacticalGpsSight");
  if(marker){marker.style.display=!showModel&&delta!==null&&Math.abs(delta)<=40?"block":"none";if(delta!==null)marker.style.left=(50+delta/40*43)+"%";marker.textContent="◇ RUMBO GPS · "+Math.round(distance)+" m";}
  const uncertainty=$("tacticalGpsUncertainty");
- if(uncertainty){uncertainty.style.display="block";uncertainty.textContent="Distancia "+Math.round(distance)+" m · GPS ±"+Math.round(accuracy)+" m · "+(showModel?"MODELO VIRTUAL DE REFERENCIA (NO ANCLADO AL TERRENO)":!validFix?"Esperando GPS más preciso":"Acércate a la zona del objetivo");}
+ if(uncertainty){uncertainty.style.display="block";uncertainty.textContent="Distancia "+Math.round(distance)+" m · GPS ±"+Math.round(accuracy)+" m · "+(showModel?"MODELO 3D DE REFERENCIA (NO ANCLADO)":!validFix?"Esperando GPS más preciso":"Acércate a la zona del objetivo");}
  if(direction)direction.textContent=showModel
-  ?"📦 Dentro de la zona GPS: caja virtual visible en cámara. Es una representación de la misión, no su posición exacta en el terreno."
+  ?"📦 Dentro de la zona GPS: vista virtual habilitada en cámara. Es una representación de la misión, no su posición exacta en el terreno."
   :"🧭 Objetivo a "+Math.round(distance)+" m · rumbo "+Math.round(bearing)+"°"+(delta===null?" · sin orientación absoluta":Math.abs(delta)<25?" · AL FRENTE":delta>0?" · GIRA "+Math.round(delta)+"° A LA DERECHA":" · GIRA "+Math.round(-delta)+"° A LA IZQUIERDA");
 }
 function tacticalUpdateDirection(){const el=$("tacticalDirection");if(!el||!tacticalTarget)return;const t=tacticalTarget;const bearing=tacticalBearing(t.lat,t.lon,t.goalLat,t.goalLon);const diff=tacticalHeading==null?null:((bearing-tacticalHeading+540)%360)-180;el.textContent=(diff==null?"Rumbo al objetivo: "+Math.round(bearing)+"° (activa brújula para orientar la cámara)":Math.abs(diff)<20?"⬆️ OBJETIVO AL FRENTE":diff>0?"➡️ GIRA "+Math.round(diff)+"° A LA DERECHA":"⬅️ GIRA "+Math.round(-diff)+"° A LA IZQUIERDA")+" · GPS aproximado";tacticalUpdateCameraTarget();}
@@ -431,7 +431,9 @@ async function launchTacticalAR(){
   tacticalCameraStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}}});
   video.srcObject=tacticalCameraStream;video.style.display="block";await video.play();
   tacticalEnableDirection(true);
-  if(tacticalTarget&&navigator.geolocation){tacticalGeoWatch=navigator.geolocation.watchPosition(p=>{if(tacticalTarget){tacticalTarget.lat=p.coords.latitude;tacticalTarget.lon=p.coords.longitude;tacticalTarget.accuracy=p.coords.accuracy;tacticalUpdateDirection();}},()=>{},{enableHighAccuracy:true,maximumAge:3000,timeout:15000});} const viewer=$("arModelViewer");if(viewer){viewer.style.cssText="position:absolute;inset:0;width:100%;height:100%;z-index:3;background:transparent;border:0;pointer-events:none";}
+  if(tacticalTarget&&navigator.geolocation){tacticalGeoWatch=navigator.geolocation.watchPosition(p=>{if(tacticalTarget){tacticalTarget.lat=p.coords.latitude;tacticalTarget.lon=p.coords.longitude;tacticalTarget.accuracy=p.coords.accuracy;tacticalUpdateDirection();}},()=>{},{enableHighAccuracy:true,maximumAge:3000,timeout:15000});} const viewer=$("arModelViewer");if(viewer){viewer.style.cssText="position:absolute;inset:0;width:100%;height:100%;z-index:4;background:transparent;border:0;pointer-events:none;opacity:1;visibility:visible";viewer.removeAttribute("poster");viewer.setAttribute("reveal","auto");}
+  await loadTacticalModelViewer();
+  const activeViewer=$("arModelViewer");if(activeViewer){activeViewer.addEventListener("error",()=>{status.textContent="No se pudo cargar el modelo 3D. Revisa la conexión y el archivo del objetivo.";},{once:true});activeViewer.addEventListener("load",()=>{tacticalUpdateCameraTarget();},{once:true});}
   tacticalUpdateCameraTarget();
   status.textContent="BÚSQUEDA GPS: la cámara muestra el entorno y el rumbo al punto del administrador. Al llegar a la zona GPS aparecerá el modelo 3D virtual en la cámara. Es una referencia visual de la misión y NO está anclado al punto físico exacto; bajo árboles la precisión puede empeorar.";
  }catch(e){status.textContent="No se pudo activar la cámara: "+e.message+". Revisa el permiso de cámara en Chrome.";stopTacticalCamera();}
