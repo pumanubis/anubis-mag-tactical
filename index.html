@@ -60,7 +60,7 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 </div>
 <div id="gameAdmin" class="hidden">
 <div class="panel">
-<div class="topline"><div><span class="tag" id="gameState">EN ESPERA</span><h2 id="selectedGameName" style="margin:8px 0">Operación</h2><div class="small" id="selectedGameId"></div></div><div class="actions"><button id="startGameBtn" onclick="setGameStatus('active')">INICIAR</button><button id="finishGameBtn" class="secondary" onclick="setGameStatus('finished')">FINALIZAR Y CONSERVAR RESULTADOS</button><button id="deleteGameBtn" class="danger" onclick="deleteSelectedGame()">ELIMINAR PARTIDA Y SUS DATOS</button></div></div>
+<div class="topline"><div><span class="tag" id="gameState">EN ESPERA</span><h2 id="selectedGameName" style="margin:8px 0">Operación</h2><div class="small" id="selectedGameId"></div></div><div class="actions"><button id="startGameBtn" onclick="setGameStatus('active')">INICIAR</button><button id="reopenGameBtn" class="secondary hidden" onclick="setGameStatus('active')">REABRIR PARTIDA</button><button id="finishGameBtn" class="secondary" onclick="setGameStatus('finished')">FINALIZAR Y CONSERVAR RESULTADOS</button><button id="deleteGameBtn" class="danger" onclick="deleteSelectedGame()">ELIMINAR PARTIDA Y SUS DATOS</button></div></div>
 </div>
 <div class="cols">
 <div class="panel">
@@ -169,7 +169,11 @@ let gameAdminBusy=false;
 function renderAdminGameState(){
  if(!currentGame)return;
  $("gameState").textContent=({waiting:"EN ESPERA",active:"ACTIVA",finished:"FINALIZADA"})[currentGame.status]||currentGame.status;
+ const finished=currentGame.status==="finished";
  $("startGameBtn").disabled=gameAdminBusy||currentGame.status!=="waiting";
+ $("startGameBtn").classList.toggle("hidden",finished);
+ $("reopenGameBtn").classList.toggle("hidden",!finished);
+ $("reopenGameBtn").disabled=gameAdminBusy||!finished;
  $("finishGameBtn").disabled=gameAdminBusy||currentGame.status==="finished";
  $("deleteGameBtn").disabled=gameAdminBusy;
 }
@@ -177,6 +181,9 @@ async function setGameStatus(status){
  if(!currentGame||gameAdminBusy||!["active","finished"].includes(status))return;
  if(!navigator.onLine){alert("Conéctate a internet para cambiar el estado de la partida.");return;}
  const game=currentGame;
+ const reopening=status==="active"&&game.status==="finished";
+ if(status===game.status)return;
+ if(reopening&&!confirm('¿Reabrir "'+game.name+'"? Quedará activa de inmediato y conservará sus equipos, objetivos, misiones y capturas.'))return;
  if(status==="finished"&&!confirm('¿Finalizar "'+game.name+'"? Los resultados y capturas se conservarán.'))return;
  gameAdminBusy=true;renderAdminGameState();
  try{
@@ -184,7 +191,7 @@ async function setGameStatus(status){
   if(error||!data?.length){alert("No se pudo cambiar el estado: "+(error?.message||"La partida cambió o no tienes permisos."));return;}
   if(currentGame?.id===game.id){currentGame.status=status;renderAdminGameState();}
   await loadGames();
-  alert(status==="active"?"Operación iniciada.":"Partida finalizada. Sus resultados se conservaron.");
+  alert(reopening?"Partida reabierta. Sus resultados se conservaron.":status==="active"?"Operación iniciada.":"Partida finalizada. Sus resultados se conservaron.");
  }finally{gameAdminBusy=false;renderAdminGameState();}
 }
 async function deleteSelectedGame(){
