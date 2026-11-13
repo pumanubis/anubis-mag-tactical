@@ -83,7 +83,7 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 </div>
 </div>
 <div class="cols">
-<div class="panel"><h2>ASIGNAR OBJETIVOS</h2><label>Jugador</label><select id="assignPlayer"></select><label>Objetivos</label><div id="assignObjectives" class="muted"></div><label><input id="assignSecret" type="checkbox" style="width:auto"> Marcar como misión secreta</label><button onclick="assignObjectives()">ASIGNAR MISIONES</button><p id="assignMsg" class="status hidden"></p><div id="assignedMissions"></div></div>
+<div class="panel"><h2>ASIGNAR OBJETIVOS</h2><label>Modalidad</label><select id="assignMode" onchange="updateAssignmentMode()"><option value="player">MISIÓN INDIVIDUAL</option><option value="teams">OBJETIVO EN DISPUTA (EQUIPOS)</option></select><div id="assignPlayerBox"><label>Jugador</label><select id="assignPlayer"></select></div><div id="assignTeamsBox" style="display:none"><label>Equipos participantes</label><div id="assignTeamsList"></div><p class="small">Mismo objetivo para los jugadores activos de los equipos seleccionados. Gana el primero en capturarlo.</p></div><label>Objetivos</label><div id="assignObjectives" class="muted"></div><label><input id="assignSecret" type="checkbox" style="width:auto"> Marcar como misión secreta</label><button onclick="assignObjectives()">ASIGNAR MISIONES</button><p id="assignMsg" class="status hidden"></p><div id="assignedMissions"></div></div>
 <div class="panel"><h2>MAPA DE OPERACIONES</h2><div class="actions"><button class="secondary" onclick="setAdminSatellite(false)">MAPA NORMAL</button><button onclick="setAdminSatellite(true)">SATÉLITE</button></div><div id="adminMap"></div><p class="small">Los marcadores representan objetivos con coordenadas GPS. Desde el computador, arrastra un marcador hasta el lugar deseado. Después confirma con GUARDAR NUEVA UBICACIÓN. También puedes hacer clic en un marcador para editarlo.</p></div>
 </div>
 <div class="panel"><h2>RESULTADOS DE LA OPERACIÓN</h2><p class="small">Solo capturas de la partida seleccionada. Las pruebas de otras partidas no se mezclan.</p><button class="secondary" onclick="loadAdminCaptureHistory()">ACTUALIZAR RESULTADOS</button><div id="adminCaptureHistory" class="small">Abre una operación para consultar sus resultados.</div></div>
@@ -156,6 +156,7 @@ async function selectGame(id){
  if(t.error||p.error||o.error){alert((t.error||p.error||o.error).message);return;}
  currentTeams=t.data;currentPlayers=p.data;currentObjectives=o.data;$("gameAdmin").classList.remove("hidden");$("selectedGameName").textContent=game.name;$("selectedGameId").textContent="ID: "+game.id;$("gameState").textContent=game.status.toUpperCase();
  $("playerTeam").innerHTML=currentTeams.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join("");
+ $("assignTeamsList").innerHTML=currentTeams.map(t=>'<label><input type="checkbox" value="'+t.id+'" style="width:auto"> '+escapeHtml(t.name)+'</label>').join("");
  $("assignPlayer").innerHTML=currentPlayers.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.callsign)+'</option>').join("");
  $("playersList").innerHTML=currentPlayers.length?currentPlayers.map(p=>'<div class="card"><b>'+escapeHtml(p.callsign)+'</b><div class="small">'+(currentTeams.find(t=>t.id===p.team_id)?.name||"Equipo")+' · '+p.status+'</div></div>').join(""):"No hay jugadores registrados.";
  renderAdminObjectivesList();
@@ -230,10 +231,37 @@ async function createPlayer(){
   await selectGame(currentGame.id);
  }catch(e){msg("playerMsg",e.message||"Error inesperado de registro.");}
 }
+function updateAssignmentMode(){
+ const teams=$("assignMode").value==="teams";
+ $("assignPlayerBox").style.display=teams?"none":"block";
+ $("assignTeamsBox").style.display=teams?"block":"none";
+}
 async function assignObjectives(){
- const player=$("assignPlayer").value,ids=Array.from(document.querySelectorAll("#assignObjectives input:checked")).map(x=>x.value);if(!player||!ids.length){msg("assignMsg","Selecciona un jugador y al menos un objetivo.");return;}
- const {data,error}=await db.rpc("assign_multiple_objectives",{p_game_id:currentGame.id,p_player_id:player,p_objective_ids:ids,p_is_secret:$("assignSecret").checked,p_notes:null});
- if(error){msg("assignMsg",error.message);return;}msg("assignMsg",data.length+" misión(es) asignada(s).");document.querySelectorAll("#assignObjectives input").forEach(x=>x.checked=false);
+ if(!currentGame){msg("assignMsg","Primero selecciona una operación.");return;}
+ const ids=Array.from(document.querySelectorAll("#assignObjectives input:checked")).map(x=>x.value);
+ if(!ids.length){msg("assignMsg","Selecciona al menos un objetivo.");return;}
+ const teamsMode=$("assignMode").value==="teams";
+ let players=[];
+ if(teamsMode){
+  const teams=Array.from(document.querySelectorAll("#assignTeamsList input:checked")).map(x=>x.value);
+  if(teams.length<2){msg("assignMsg","Selecciona al menos dos equipos para disputar el objetivo.");return;}
+  players=currentPlayers.filter(p=>teams.includes(p.team_id)&&p.status==="active");
+  if(!players.length){msg("assignMsg","Los equipos seleccionados no tienen jugadores activos.");return;}
+  if(teams.some(t=>!players.some(p=>p.team_id===t))){msg("assignMsg","Todos los equipos seleccionados deben tener jugadores activos.");return;}
+ }else{
+  const id=$("assignPlayer").value;
+  if(!id){msg("assignMsg","Selecciona un jugador.");return;}
+  players=[{id}];
+ }
+ let success=0,errors=[];
+ for(const p of players){
+  const {data,error}=await db.rpc("assign_multiple_objectives",{p_game_id:currentGame.id,p_player_id:p.id,p_objective_ids:ids,p_is_secret:$("assignSecret").checked,p_notes:null});
+  if(error)errors.push((p.callsign||"Jugador")+": "+error.message);
+  else success+=data?.length||0;
+ }
+ msg("assignMsg",success+" asignación(es) realizadas"+(teamsMode?" para "+players.length+" jugadores.":"")+(errors.length?" Errores: "+errors.join(" | "):"."));
+ if(!errors.length)document.querySelectorAll("#assignObjectives input").forEach(x=>x.checked=false);
+ await loadAssignedMissions();
 }
 async function loadAdminCaptureHistory(){
  const el=$("adminCaptureHistory");if(!el||!currentGame)return;
