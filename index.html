@@ -354,17 +354,17 @@ function tacticalUpdateCameraTarget(){
  // Umbral de llegada de 8 m; GPS bajo árboles puede ser insuficiente.
  // Histéresis: evita parpadeo por saltos normales de GPS bajo árboles.
  const fixOk=accuracy>0&&accuracy<=45;
- if(distance>=16)tacticalModelArrived=false;
- else if(fixOk&&distance<=12)tacticalModelArrived=true;
+ if(distance>=7)tacticalModelArrived=false;
+ else if(fixOk&&distance<=4)tacticalModelArrived=true;
  const freshFix=Date.now()-tacticalLastGoodFix<=12000;
  if(!freshFix)tacticalModelArrived=false;
- const arrived=tacticalModelArrived&&freshFix&&distance<16;
+ const arrived=tacticalModelArrived&&freshFix&&distance<7;
  viewer.style.opacity=arrived?"1":"0";viewer.style.visibility=arrived?"visible":"hidden";
  viewer.style.transform="none";
  const marker=$("tacticalGpsSight");
  if(marker){marker.style.display=!arrived&&delta!==null&&Math.abs(delta)<=40?"block":"none";if(delta!==null)marker.style.left=(50+delta/40*43)+"%";marker.textContent="◇ OBJETIVO A "+Math.round(distance)+" m";}
  const uncertainty=$("tacticalGpsUncertainty");
- if(uncertainty){uncertainty.style.display="block";uncertainty.textContent="Distancia "+Math.round(distance)+" m · GPS ±"+(Number.isFinite(accuracy)?Math.round(accuracy):"?")+" m · "+(arrived?"LLEGASTE: MODELO VIRTUAL DE REFERENCIA":"ACÉRCATE AL OBJETIVO (se activa a ≤12 m; GPS ±45 m máximo)");}
+ if(uncertainty){uncertainty.style.display="block";uncertainty.textContent="Distancia "+Math.round(distance)+" m · GPS ±"+(Number.isFinite(accuracy)?Math.round(accuracy):"?")+" m · "+(arrived?"LLEGASTE: MODELO VIRTUAL DE REFERENCIA":"ACÉRCATE AL OBJETIVO (se activa a ≤4 m; se oculta a ≥7 m; GPS ±45 m máximo)");}
  if(direction)direction.textContent=arrived
  ?"📦 Llegaste al punto GPS estimado: caja virtual visible. No está anclada físicamente al terreno."
  :"🧭 Sigue hacia el punto del administrador: "+Math.round(distance)+" m · rumbo "+Math.round(bearing)+"°"+(delta===null?"":Math.abs(delta)<25?" · AL FRENTE":delta>0?" · DERECHA "+Math.round(delta)+"°":" · IZQUIERDA "+Math.round(-delta)+"°");
