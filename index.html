@@ -523,9 +523,9 @@ async function applyLiveGpsFix(p){
  const liveBtn=$("gpsLiveBtn");if(liveBtn)liveBtn.textContent="DETENER GPS EN VIVO";
  updateGpsNavigation(gpsObjectives);
  if(mapPlayer){
-  if(!gpsLiveMarker)gpsLiveMarker=L.circleMarker(myGps,{radius:11,color:"#ffffff",weight:3,fillColor:"#1878f3",fillOpacity:1}).addTo(mapPlayer).bindPopup("Mi ubicación GPS en vivo");else gpsLiveMarker.setLatLng(myGps);
+  if(!gpsLiveMarker)gpsLiveMarker=L.circleMarker(myGps,{radius:11,color:"#ffffff",weight:3,fillColor:"#1878f3",fillOpacity:1}).addTo(playerMapOverlay||mapPlayer).bindPopup("Mi ubicación GPS en vivo");else gpsLiveMarker.setLatLng(myGps);
   const near=gpsObjectives.filter(x=>x.latitude!=null&&x.longitude!=null).map(x=>({p:[Number(x.latitude),Number(x.longitude)],d:metersBetween(myGps,[Number(x.latitude),Number(x.longitude)])})).sort((a,b)=>a.d-b.d)[0];
-  if(gpsLiveLine){mapPlayer.removeLayer(gpsLiveLine);gpsLiveLine=null;}if(near)gpsLiveLine=L.polyline([myGps,near.p],{color:"#f1ca52",weight:3,dashArray:"7,7"}).addTo(mapPlayer);
+  if(gpsLiveLine){if(playerMapOverlay)playerMapOverlay.removeLayer(gpsLiveLine);else mapPlayer.removeLayer(gpsLiveLine);gpsLiveLine=null;}if(near)gpsLiveLine=L.polyline([myGps,near.p],{color:"#f1ca52",weight:3,dashArray:"7,7"}).addTo(playerMapOverlay||mapPlayer);
   /* No recentrar automáticamente el mapa: evita saltos visuales por variación GPS. */
  }
  const now=Date.now();
@@ -554,21 +554,28 @@ async function shareLocation(){
   else msg("playerStatus","GPS visible y ubicación compartida con tu equipo. Precisión aproximada: "+Math.round(p.coords.accuracy)+" m.");
  },e=>msg("playerStatus","No se pudo obtener GPS: "+e.message+". Comprueba el permiso de ubicación y activa la ubicación precisa."),{enableHighAccuracy:true,timeout:20000,maximumAge:0});
 }
+let playerMapRenderVersion=0,playerMapOverlay=null;
 async function loadPlayerMap(fitView=true){
+ const renderVersion=++playerMapRenderVersion;
  if(!currentGame||!window.L)return;
  let objectives=[],locs=[],names=new Map();
  if(navigator.onLine){
   const [o,l,p]=await Promise.all([db.from("objectives").select("name,latitude,longitude,status,radius_m").eq("game_id",currentGame.id).eq("status","available"),db.from("player_locations").select("user_id,latitude,longitude,updated_at").eq("game_id",currentGame.id),db.from("game_players").select("user_id,callsign").eq("game_id",currentGame.id).eq("team_id",currentProfile?.team_id||currentTeams[0]?.id).eq("status","active")]);
   objectives=o.data||[];const teamIds=new Set((p.data||[]).map(x=>x.user_id));locs=(l.data||[]).filter(x=>teamIds.has(x.user_id));names=new Map((p.data||[]).map(x=>[x.user_id,x.callsign]));
  }else{const snap=JSON.parse(localStorage.getItem("anubis_player_"+currentUser.id)||"null");objectives=(snap?.objectives||[]).filter(x=>x.status!=="captured");}
+ if(renderVersion!==playerMapRenderVersion)return;
+ locs=locs.filter(x=>x.user_id!==currentUser.id&&Date.now()-new Date(x.updated_at).getTime()<120000);
  gpsObjectives=objectives;const pts=[...objectives.filter(x=>x.latitude!=null&&x.longitude!=null).map(x=>[Number(x.latitude),Number(x.longitude)]),...locs.map(x=>[Number(x.latitude),Number(x.longitude)])];
  if(myGps)pts.push(myGps);
  if(!mapPlayer){mapPlayer=L.map("playerMap").setView(pts.length?pts[0]:[4.65,-74.1],pts.length?14:5);setTacticalMapLayer(tacticalSatellite);}
- else {mapPlayer.eachLayer(layer=>{if(layer instanceof L.Marker||layer instanceof L.CircleMarker||layer instanceof L.Polyline)mapPlayer.removeLayer(layer);});gpsLiveMarker=null;gpsLiveLine=null;}
- objectives.filter(x=>x.latitude!=null&&x.longitude!=null).forEach(x=>L.marker([Number(x.latitude),Number(x.longitude)]).addTo(mapPlayer).bindPopup("Objetivo: "+escapeHtml(x.name)));
- locs.filter(x=>x.user_id!==currentUser.id).forEach(x=>L.circleMarker([Number(x.latitude),Number(x.longitude)],{radius:6,color:"#9dd9ff",weight:2,fillColor:"#1e5e94",fillOpacity:.8}).addTo(mapPlayer).bindPopup("Compañero: "+escapeHtml(names.get(x.user_id)||"Operador")));
+ if(playerMapOverlay)playerMapOverlay.clearLayers();else playerMapOverlay=L.layerGroup().addTo(mapPlayer);
+ if(gpsLiveMarker&&!playerMapOverlay.hasLayer(gpsLiveMarker))mapPlayer.removeLayer(gpsLiveMarker);
+ if(gpsLiveLine&&!playerMapOverlay.hasLayer(gpsLiveLine))mapPlayer.removeLayer(gpsLiveLine);
+ gpsLiveMarker=null;gpsLiveLine=null;
+ objectives.filter(x=>x.latitude!=null&&x.longitude!=null).forEach(x=>L.marker([Number(x.latitude),Number(x.longitude)]).addTo(playerMapOverlay).bindPopup("Objetivo: "+escapeHtml(x.name)));
+ locs.filter(x=>x.user_id!==currentUser.id).forEach(x=>L.circleMarker([Number(x.latitude),Number(x.longitude)],{radius:6,color:"#9dd9ff",weight:2,fillColor:"#1e5e94",fillOpacity:.8}).addTo(playerMapOverlay).bindPopup("Compañero: "+escapeHtml(names.get(x.user_id)||"Operador")));
  if(!myGps){const own=locs.find(x=>x.user_id===currentUser.id);if(own)myGps=[Number(own.latitude),Number(own.longitude)];}
- if(myGps){gpsLiveMarker=L.circleMarker(myGps,{radius:11,color:"#ffffff",weight:3,fillColor:"#1878f3",fillOpacity:1}).addTo(mapPlayer).bindPopup("Mi ubicación GPS");const near=objectives.filter(x=>x.latitude!=null&&x.longitude!=null).map(x=>({p:[Number(x.latitude),Number(x.longitude)],d:metersBetween(myGps,[Number(x.latitude),Number(x.longitude)])})).sort((a,b)=>a.d-b.d)[0];if(near)gpsLiveLine=L.polyline([myGps,near.p],{color:"#f1ca52",weight:3,dashArray:"7,7"}).addTo(mapPlayer);}
+ if(myGps){gpsLiveMarker=L.circleMarker(myGps,{radius:11,color:"#ffffff",weight:3,fillColor:"#1878f3",fillOpacity:1}).addTo(playerMapOverlay).bindPopup("Mi ubicación GPS");const near=objectives.filter(x=>x.latitude!=null&&x.longitude!=null).map(x=>({p:[Number(x.latitude),Number(x.longitude)],d:metersBetween(myGps,[Number(x.latitude),Number(x.longitude)])})).sort((a,b)=>a.d-b.d)[0];if(near)gpsLiveLine=L.polyline([myGps,near.p],{color:"#f1ca52",weight:3,dashArray:"7,7"}).addTo(mapPlayer);}
  updateGpsNavigation(objectives);
  setTimeout(()=>{mapPlayer.invalidateSize();if(fitView&&pts.length)mapPlayer.fitBounds(L.latLngBounds(pts),{padding:[28,28],maxZoom:17});},300);
 }
