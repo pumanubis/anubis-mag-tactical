@@ -83,7 +83,7 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 </div>
 </div>
 <div class="cols">
-<div class="panel"><h2>ASIGNAR OBJETIVOS</h2><label>Modalidad</label><select id="assignMode" onchange="updateAssignmentMode()"><option value="player">MISIÓN INDIVIDUAL</option><option value="teams">OBJETIVO EN DISPUTA (EQUIPOS)</option></select><div id="assignPlayerBox"><label>Jugador</label><select id="assignPlayer"></select></div><div id="assignTeamsBox" style="display:none"><label>Equipos participantes</label><div id="assignTeamsList"></div><p class="small">Mismo objetivo para los jugadores activos de los equipos seleccionados. Gana el primero en capturarlo.</p></div><label>Objetivos</label><div id="assignObjectives" class="muted"></div><label><input id="assignSecret" type="checkbox" style="width:auto"> Marcar como misión secreta</label><button onclick="assignObjectives()">ASIGNAR MISIONES</button><p id="assignMsg" class="status hidden"></p><div id="assignedMissions"></div></div>
+<div class="panel"><h2>ASIGNAR OBJETIVOS</h2><label>Modalidad</label><select id="assignMode" onchange="updateAssignmentMode()"><option value="player">MISIÓN INDIVIDUAL</option><option value="teams">OBJETIVO EN DISPUTA (EQUIPOS)</option></select><div id="assignPlayerBox"><label>Jugador</label><select id="assignPlayer"></select></div><div id="assignTeamsBox" style="display:none"><label>Equipos participantes</label><div id="assignTeamsList"></div><p class="small">Mismo objetivo para los jugadores activos de los equipos seleccionados. Gana el primero en capturarlo.</p></div><label><input id="assignSequence" type="checkbox" style="width:auto" onchange="renderAssignableObjectives()"> Secuencia automática</label><p id="assignSequenceHint" class="small hidden">Marca los objetivos en el orden en que deben jugarse. Solo se abre el primero. Cada captura confirmada abre el siguiente para todos los participantes.</p><label>Objetivos</label><div id="assignObjectives" class="muted"></div><label id="assignSecretLabel"><input id="assignSecret" type="checkbox" style="width:auto"> Marcar como misión secreta</label><button onclick="assignObjectives()">ASIGNAR MISIONES</button><p id="assignMsg" class="status hidden"></p><div id="assignedMissions"></div></div>
 <div class="panel"><h2>MAPA DE OPERACIONES</h2><div class="actions"><button class="secondary" onclick="setAdminSatellite(false)">MAPA NORMAL</button><button onclick="setAdminSatellite(true)">SATÉLITE</button></div><div id="adminMap"></div><p class="small">Los marcadores representan objetivos con coordenadas GPS. Desde el computador, arrastra un marcador hasta el lugar deseado. Después confirma con GUARDAR NUEVA UBICACIÓN. También puedes hacer clic en un marcador para editarlo.</p></div>
 </div>
 <div class="panel"><h2>RESULTADOS DE LA OPERACIÓN</h2><p class="small">Solo capturas de la partida seleccionada. Las pruebas de otras partidas no se mezclan.</p><button class="secondary" onclick="loadAdminCaptureHistory()">ACTUALIZAR RESULTADOS</button><div id="adminCaptureHistory" class="small">Abre una operación para consultar sus resultados.</div></div>
@@ -162,7 +162,7 @@ async function selectGame(id){
  renderAdminObjectivesList();
  if(editingObjectiveId){const edited=currentObjectives.find(o=>o.id===editingObjectiveId);if(!edited)cancelObjectiveLocation();else $("editObjectiveName").textContent=edited.name;}
 
- $("assignObjectives").innerHTML=currentObjectives.filter(o=>o.status==="available").map(o=>'<label><input type="checkbox" value="'+o.id+'" style="width:auto"> '+escapeHtml(o.name)+'</label>').join("")||"Primero crea objetivos.";
+ renderAssignableObjectives();
  await loadAssignedMissions();await loadAdminCaptureHistory();renderAdminMap();
 }
 let gameAdminBusy=false;
@@ -274,14 +274,33 @@ function updateAssignmentMode(){
  $("assignPlayerBox").style.display=teams?"none":"block";
  $("assignTeamsBox").style.display=teams?"block":"none";
 }
+let orderedMissionIds=[];
+function renderAssignableObjectives(){
+ orderedMissionIds=[];
+ const sequence=$("assignSequence").checked;
+ $("assignSecretLabel").classList.toggle("hidden",sequence);
+ $("assignSequenceHint").classList.toggle("hidden",!sequence);
+ $("assignObjectives").innerHTML=currentObjectives.filter(o=>o.status==="available"&&!o.in_mission_sequence).map(o=>'<label><input type="checkbox" value="'+o.id+'" style="width:auto" onchange="updateMissionOrder(this)"> <span class="mission-order"></span>'+escapeHtml(o.name)+'</label>').join("")||"Crea objetivos disponibles para asignar.";
+}
+function updateMissionOrder(input){
+ if(input.checked&&!orderedMissionIds.includes(input.value))orderedMissionIds.push(input.value);
+ if(!input.checked)orderedMissionIds=orderedMissionIds.filter(id=>id!==input.value);
+ document.querySelectorAll("#assignObjectives input").forEach(box=>{
+  const n=orderedMissionIds.indexOf(box.value);
+  box.nextElementSibling.textContent=$("assignSequence").checked&&n>=0?(n+1)+". ":"";
+ });
+}
 async function assignObjectives(){
  if(!currentGame){msg("assignMsg","Primero selecciona una operación.");return;}
- const ids=Array.from(document.querySelectorAll("#assignObjectives input:checked")).map(x=>x.value);
+ const sequence=$("assignSequence").checked;
+ const ids=sequence?[...orderedMissionIds]:Array.from(document.querySelectorAll("#assignObjectives input:checked")).map(x=>x.value);
  if(!ids.length){msg("assignMsg","Selecciona al menos un objetivo.");return;}
  const teamsMode=$("assignMode").value==="teams";
+ let teamIds=null;
  let players=[];
  if(teamsMode){
   const teams=Array.from(document.querySelectorAll("#assignTeamsList input:checked")).map(x=>x.value);
+  teamIds=teams;
   if(teams.length<2){msg("assignMsg","Selecciona al menos dos equipos para disputar el objetivo.");return;}
   players=currentPlayers.filter(p=>teams.includes(p.team_id)&&p.status==="active");
   if(!players.length){msg("assignMsg","Los equipos seleccionados no tienen jugadores activos.");return;}
@@ -290,6 +309,14 @@ async function assignObjectives(){
   const id=$("assignPlayer").value;
   if(!id){msg("assignMsg","Selecciona un jugador.");return;}
   players=[{id}];
+ }
+ if(sequence){
+  if(ids.length<2){msg("assignMsg","Selecciona al menos dos objetivos en el orden deseado.");return;}
+  const gameId=currentGame.id;
+  const {data,error}=await db.rpc("assign_mission_sequence",{p_game_id:gameId,p_objective_ids:ids,p_team_ids:teamIds,p_player_id:teamsMode?null:players[0].id});
+  if(error){msg("assignMsg",error.message);return;}
+  if(currentGame?.id===gameId){await selectGame(gameId);msg("assignMsg","Secuencia creada: "+ids.length+" objetivos. Solo el primero está abierto. "+data+" asignaciones.");}
+  return;
  }
  let success=0,errors=[];
  for(const p of players){
@@ -318,7 +345,7 @@ async function loadAssignedMissions(){
  const {data,error}=await db.from("objective_assignments").select("id,player_id,objective_id,status,is_secret,unlocked_at").eq("game_id",currentGame.id).order("assigned_at",{ascending:false});
  if(error){$("assignedMissions").textContent=error.message;return;}
  const active=data.filter(a=>currentObjectives.find(o=>o.id===a.objective_id)?.status!=="retired");
- $("assignedMissions").innerHTML=active.length?'<h3>Misiones asignadas / desbloqueo</h3>'+active.map(a=>{const p=currentPlayers.find(x=>x.id===a.player_id),o=currentObjectives.find(x=>x.id===a.objective_id);return '<div class="card"><b>'+escapeHtml(p?.callsign||"Jugador")+'</b> · '+escapeHtml(o?.name||"Objetivo")+'<div class="small">'+(a.is_secret?"SECRETA":"NORMAL")+' · '+(a.unlocked_at?"DESBLOQUEADA":"BLOQUEADA")+'</div>'+(a.unlocked_at?"":'<button class="secondary" onclick="unlockAssignment(\''+a.id+'\')">DESBLOQUEAR</button>')+' <button class="secondary" onclick="removeAssignment(\''+a.id+'\')">QUITAR MISIÓN AL JUGADOR</button></div>';}).join(""):"<p class='small'>Aún no hay misiones asignadas.</p>";
+ $("assignedMissions").innerHTML=active.length?'<h3>Misiones asignadas / desbloqueo</h3>'+active.map(a=>{const p=currentPlayers.find(x=>x.id===a.player_id),o=currentObjectives.find(x=>x.id===a.objective_id);return '<div class="card"><b>'+escapeHtml(p?.callsign||"Jugador")+'</b> · '+escapeHtml(o?.name||"Objetivo")+'<div class="small">'+(a.is_secret?"SECRETA":"NORMAL")+' · '+(a.unlocked_at?"DESBLOQUEADA":"BLOQUEADA")+'</div>'+(a.unlocked_at||o?.in_mission_sequence?"":'<button class="secondary" onclick="unlockAssignment(\''+a.id+'\')">DESBLOQUEAR</button>')+' <button class="secondary" onclick="removeAssignment(\''+a.id+'\')">QUITAR MISIÓN AL JUGADOR</button></div>';}).join(""):"<p class='small'>Aún no hay misiones asignadas.</p>";
 }
 async function removeAssignment(id){
  if(!currentGame||!navigator.onLine){alert("Selecciona una partida y conéctate a internet.");return;}
@@ -408,7 +435,7 @@ async function tacticalCheckCapturedObjectives(){
  try{
   const gameId=currentGame.id;
   const [objs,game]=await Promise.all([
-   db.from("objectives").select("id,name,status,controlling_team_id").eq("game_id",gameId),
+   db.from("objectives").select("id,name,status,controlling_team_id,in_mission_sequence").eq("game_id",gameId),
    db.from("games").select("status").eq("id",gameId).maybeSingle()
   ]);
   const {data,error}=objs;
@@ -423,7 +450,8 @@ async function tacticalCheckCapturedObjectives(){
   let changed=false;
   for(const obj of data){
    const key=gameId+":"+obj.id,previous=tacticalCaptureSeen.get(key);
-   if(previous==="available"&&obj.status==="captured"){
+   if(obj.in_mission_sequence&&obj.status==="available"&&!(snap?.objectives||[]).some(x=>x.id===obj.id)){changed=true;}
+   if((previous||snap?.objectives?.find(x=>x.id===obj.id)?.status)==="available"&&obj.status==="captured"){
     const rival=obj.controlling_team_id&&obj.controlling_team_id!==teamId;
     tacticalCaptureNotice((rival?"⚠️ OBJETIVO PERDIDO: ":"🎯 OBJETIVO CAPTURADO: ")+obj.name+(rival?" · El equipo rival llegó primero.":" · Ya no está disponible."));
     changed=true;
@@ -475,11 +503,14 @@ async function loadPlayerGame(){
   db.from("games").select("*").eq("id",gp.game_id).single(),
   db.from("teams").select("*").eq("id",gp.team_id).single(),
   db.from("objective_assignments").select("id,status,is_secret,sequence_order,unlocked_at,objectives(id,name,status,latitude,longitude,radius_m,visual_description,ar_asset_url,objective_type)").eq("player_id",gp.id).not("unlocked_at","is",null).order("sequence_order"),
-  db.from("objectives").select("id,name,token_hash,status,latitude,longitude,radius_m,visual_description,ar_asset_url,objective_type").eq("game_id",gp.game_id)
+  db.from("objectives").select("id,name,token_hash,status,latitude,longitude,radius_m,visual_description,ar_asset_url,objective_type,in_mission_sequence").eq("game_id",gp.game_id)
  ]);
  if(g.error||t.error||a.error||o.error){$("playerGameInfo").textContent="No se pudo cargar la operación.";return;}
  currentGame=g.data;currentTeams=[t.data];currentPlayers=[gp];
  const snap={gp,game:g.data,team:t.data,assignments:(a.data||[]).filter(x=>x.objectives&&x.objectives.status!=="retired"),objectives:o.data||[]};
+ const prior=JSON.parse(localStorage.getItem("anubis_player_"+currentUser.id)||"null");
+ const opened=(prior?.game?.id===gp.game_id?snap.objectives.filter(o=>o.in_mission_sequence&&o.status==="available"&&!prior.objectives?.some(x=>x.id===o.id)):[]);
+ if(opened.length)tacticalCaptureNotice("Nueva misión desbloqueada: "+opened.map(o=>o.name).join(", "));
  localStorage.setItem("anubis_player_"+currentUser.id,JSON.stringify(snap));
  localStorage.setItem("anubis_tokens_"+gp.game_id,JSON.stringify((o.data||[]).filter(x=>x.token_hash&&x.status!=="retired").map(x=>({id:x.id,name:x.name,token_hash:x.token_hash,status:x.status}))));
  renderPlayerSnapshot(snap,false);tacticalWatchCaptures(gp.game_id);await loadPlayerMap();
@@ -802,7 +833,7 @@ async function captureObjective(raw){
   msg("captureMsg","CAPTURA GUARDADA SIN CONEXIÓN: "+objective.name+". Se validará y sincronizará al recuperar internet.");
   return;
  }
- const {data,error}=await db.functions.invoke("capture-objective",{body:{token:raw}});
+ const {data,error}=await db.rpc("capture_qr_objective",{p_token:raw});
  if(error){msg("captureMsg",error.message);return;}
  if(!data?.success){msg("captureMsg",data?.error||"No se pudo capturar.");return;}
  known.forEach(x=>{if(x.id===objective.id)x.status="captured";});localStorage.setItem("anubis_tokens_"+currentGame.id,JSON.stringify(known));
@@ -813,7 +844,7 @@ async function syncPendingCaptures(){
  let queue=JSON.parse(localStorage.getItem("anubis_capture_queue")||"[]");if(!queue.length)return;
  const remaining=[];
  for(const item of queue){
-  try{const {data,error}=await db.functions.invoke("capture-objective",{body:{token:item.token}});
+  try{const {data,error}=await db.rpc("capture_qr_objective",{p_token:item.token});
    if(error||!data?.success){item.last_error=data?.error||error?.message||"Pendiente de validar";remaining.push(item);}
    else{const cache=JSON.parse(localStorage.getItem("anubis_tokens_"+item.game_id)||"[]");cache.forEach(x=>{if(x.id===item.objective_id)x.status="captured";});localStorage.setItem("anubis_tokens_"+item.game_id,JSON.stringify(cache));}
   }catch{remaining.push(item);}
