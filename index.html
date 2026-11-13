@@ -275,10 +275,11 @@ function updateAssignmentMode(){
  $("assignTeamsBox").style.display=teams?"block":"none";
  renderSequenceSteps();
 }
-let orderedMissionIds=[];missionStepRules.clear();
+let orderedMissionIds=[];
 const missionStepRules=new Map();
 function renderAssignableObjectives(){
  orderedMissionIds=[];
+ missionStepRules.clear();
  const sequence=$("assignSequence").checked;
  $("assignSecretLabel").classList.toggle("hidden",sequence);
  $("assignSequenceHint").classList.toggle("hidden",!sequence);
