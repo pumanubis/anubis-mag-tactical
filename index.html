@@ -87,7 +87,7 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 <div class="panel"><h2>MAPA DE OPERACIONES</h2><div class="actions"><button class="secondary" onclick="setAdminSatellite(false)">MAPA NORMAL</button><button onclick="setAdminSatellite(true)">SATÉLITE</button></div><div id="adminMap"></div><p class="small">Los marcadores representan objetivos con coordenadas GPS. Desde el computador, arrastra un marcador hasta el lugar deseado. Después confirma con GUARDAR NUEVA UBICACIÓN. También puedes hacer clic en un marcador para editarlo.</p></div>
 </div>
 <div class="panel"><h2>RESULTADOS DE LA OPERACIÓN</h2><p class="small">Solo capturas de la partida seleccionada. Las pruebas de otras partidas no se mezclan.</p><button class="secondary" onclick="loadAdminCaptureHistory()">ACTUALIZAR RESULTADOS</button><div id="adminCaptureHistory" class="small">Abre una operación para consultar sus resultados.</div></div>
-<div class="panel"><h2>OBJETIVOS CREADOS</h2><label><input type="checkbox" id="showCapturedObjectives" style="width:auto" onchange="renderAdminObjectivesList()"> MOSTRAR OBJETIVOS CAPTURADOS (HISTORIAL)</label><div id="objectivesList"></div><div id="editObjectivePanel" class="card hidden"><h2>EDITAR UBICACIÓN DEL OBJETIVO</h2><p id="editObjectiveName" class="gold"></p><p class="small">Escribe coordenadas o toca un punto del mapa de operaciones. El QR y las asignaciones se conservarán.</p><div class="row"><div><label>Latitud</label><input id="editObjLat" type="number" step="any"></div><div><label>Longitud</label><input id="editObjLng" type="number" step="any"></div></div><div class="actions"><button class="secondary" onclick="useCurrentPosition('editObjLat','editObjLng')">USAR MI GPS</button><button onclick="saveObjectiveLocation()">GUARDAR NUEVA UBICACIÓN</button><button class="secondary" onclick="cancelObjectiveLocation()">CANCELAR</button></div><p id="editObjectiveStatus" class="small"></p></div></div>
+<div class="panel"><h2>OBJETIVOS CREADOS</h2><label><input type="checkbox" id="showCapturedObjectives" style="width:auto" onchange="renderAdminObjectivesList()"> MOSTRAR CAPTURADOS Y RETIRADOS (HISTORIAL)</label><div id="objectivesList"></div><div id="editObjectivePanel" class="card hidden"><h2>EDITAR UBICACIÓN DEL OBJETIVO</h2><p id="editObjectiveName" class="gold"></p><p class="small">Escribe coordenadas o toca un punto del mapa de operaciones. El QR y las asignaciones se conservarán.</p><div class="row"><div><label>Latitud</label><input id="editObjLat" type="number" step="any"></div><div><label>Longitud</label><input id="editObjLng" type="number" step="any"></div></div><div class="actions"><button class="secondary" onclick="useCurrentPosition('editObjLat','editObjLng')">USAR MI GPS</button><button onclick="saveObjectiveLocation()">GUARDAR NUEVA UBICACIÓN</button><button class="secondary" onclick="cancelObjectiveLocation()">CANCELAR</button></div><p id="editObjectiveStatus" class="small"></p></div></div>
 </div>
 </section>
 
@@ -162,7 +162,7 @@ async function selectGame(id){
  renderAdminObjectivesList();
  if(editingObjectiveId){const edited=currentObjectives.find(o=>o.id===editingObjectiveId);if(!edited)cancelObjectiveLocation();else $("editObjectiveName").textContent=edited.name;}
 
- $("assignObjectives").innerHTML=currentObjectives.filter(o=>o.status!=="captured").map(o=>'<label><input type="checkbox" value="'+o.id+'" style="width:auto"> '+escapeHtml(o.name)+'</label>').join("")||"Primero crea objetivos.";
+ $("assignObjectives").innerHTML=currentObjectives.filter(o=>o.status==="available").map(o=>'<label><input type="checkbox" value="'+o.id+'" style="width:auto"> '+escapeHtml(o.name)+'</label>').join("")||"Primero crea objetivos.";
  await loadAssignedMissions();await loadAdminCaptureHistory();renderAdminMap();
 }
 async function setGameStatus(status){
@@ -279,7 +279,8 @@ async function loadAdminCaptureHistory(){
 async function loadAssignedMissions(){
  const {data,error}=await db.from("objective_assignments").select("id,player_id,objective_id,status,is_secret,unlocked_at").eq("game_id",currentGame.id).order("assigned_at",{ascending:false});
  if(error){$("assignedMissions").textContent=error.message;return;}
- $("assignedMissions").innerHTML=data.length?'<h3>Misiones asignadas / desbloqueo</h3>'+data.map(a=>{const p=currentPlayers.find(x=>x.id===a.player_id),o=currentObjectives.find(x=>x.id===a.objective_id);return '<div class="card"><b>'+escapeHtml(p?.callsign||"Jugador")+'</b> · '+escapeHtml(o?.name||"Objetivo")+'<div class="small">'+(a.is_secret?"SECRETA":"NORMAL")+' · '+(a.unlocked_at?"DESBLOQUEADA":"BLOQUEADA")+'</div>'+(a.unlocked_at?"":'<button class="secondary" onclick="unlockAssignment(\''+a.id+'\')">DESBLOQUEAR</button>')+' <button class="secondary" onclick="removeAssignment(\''+a.id+'\')">QUITAR MISIÓN AL JUGADOR</button></div>';}).join(""):"<p class='small'>Aún no hay misiones asignadas.</p>";
+ const active=data.filter(a=>currentObjectives.find(o=>o.id===a.objective_id)?.status!=="retired");
+ $("assignedMissions").innerHTML=active.length?'<h3>Misiones asignadas / desbloqueo</h3>'+active.map(a=>{const p=currentPlayers.find(x=>x.id===a.player_id),o=currentObjectives.find(x=>x.id===a.objective_id);return '<div class="card"><b>'+escapeHtml(p?.callsign||"Jugador")+'</b> · '+escapeHtml(o?.name||"Objetivo")+'<div class="small">'+(a.is_secret?"SECRETA":"NORMAL")+' · '+(a.unlocked_at?"DESBLOQUEADA":"BLOQUEADA")+'</div>'+(a.unlocked_at?"":'<button class="secondary" onclick="unlockAssignment(\''+a.id+'\')">DESBLOQUEAR</button>')+' <button class="secondary" onclick="removeAssignment(\''+a.id+'\')">QUITAR MISIÓN AL JUGADOR</button></div>';}).join(""):"<p class='small'>Aún no hay misiones asignadas.</p>";
 }
 async function removeAssignment(id){
  if(!currentGame||!navigator.onLine){alert("Selecciona una partida y conéctate a internet.");return;}
@@ -296,12 +297,13 @@ async function unlockAssignment(id){
 }
 function setAdminSatellite(satellite){adminSatellite=satellite;if(!mapAdmin)return;if(adminTileLayer)mapAdmin.removeLayer(adminTileLayer);adminTileLayer=L.tileLayer(satellite?"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}":"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:satellite?"Imagery © Esri":"© OpenStreetMap",maxZoom:19}).addTo(mapAdmin);adminTileLayer.bringToBack();}
 function renderAdminObjectivesList(){
- const visible=currentObjectives.filter(o=>$("showCapturedObjectives")?.checked||o.status!=="captured");
+ const visible=currentObjectives.filter(o=>$("showCapturedObjectives")?.checked||o.status==="available");
  $("objectivesList").innerHTML=visible.length?visible.map(o=>{
-  const head='<div class="card"><div class="topline"><b>'+escapeHtml(o.name)+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+escapeHtml(o.status)+'</span></div>';
+  const head='<div class="card"><div class="topline"><b>'+escapeHtml(o.name)+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+escapeHtml(({available:"DISPONIBLE",captured:"CAPTURADO",retired:"RETIRADO"})[o.status]||o.status)+'</span></div>';
+  const retire=o.status!=="retired"?' <button class="secondary" onclick="retireObjective(\''+o.id+'\')">RETIRAR OBJETIVO</button>':"";
   const info='<div class="small">'+(o.latitude!=null?Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+' · radio '+Number(o.radius_m||0)+' m</div>';
-  const actions=o.status==="captured"?'<p class="small">Capturado: se conserva en el historial. Crea otro objetivo para una nueva prueba.</p>':'<button class="secondary" onclick="editObjectiveLocation(\''+o.id+'\')">EDITAR UBICACIÓN</button> <button class="secondary" onclick="deleteObjective(\''+o.id+'\')">ELIMINAR OBJETIVO</button>';
-  return head+info+actions+'</div>';
+  const actions=o.status==="retired"?'<p class="small">Retirado. Sus capturas se conservan en los resultados.</p>':o.status==="captured"?'<p class="small">Capturado: se conserva en el historial. Crea otro objetivo para una nueva prueba.</p>':'<button class="secondary" onclick="editObjectiveLocation(\''+o.id+'\')">EDITAR UBICACIÓN</button> <button class="secondary" onclick="deleteObjective(\''+o.id+'\')">ELIMINAR OBJETIVO</button>';
+  return head+info+actions+retire+'</div>';
  }).join(""):"No hay objetivos pendientes. Crea uno nuevo o consulta el historial.";
 }
 async function deleteObjective(id){
@@ -311,18 +313,29 @@ async function deleteObjective(id){
  if(!navigator.onLine){alert("Conéctate a internet para eliminar objetivos.");return;}
  if(!confirm('¿Eliminar definitivamente el objetivo "'+obj.name+'"? También desaparecerán sus asignaciones. Esta acción no se puede deshacer.'))return;
  const {data,error}=await db.from("objectives").delete().eq("id",id).eq("game_id",currentGame.id).select("id");
- if(error){alert("No se pudo eliminar: "+error.message);return;}
+ if(error){if(error.code==="23503"&&error.message.includes("objective_captures")){await retireObjective(id,true);return;}alert("No se pudo eliminar: "+error.message);return;}
  if(!data?.length){alert("No se eliminó el objetivo. Verifica tus permisos de administrador.");return;}
  if(editingObjectiveId===id)cancelObjectiveLocation();
  await selectGame(currentGame.id);
  alert("Objetivo eliminado y asignaciones retiradas correctamente.");
+}
+async function retireObjective(id,hasHistory=false){
+ const gameId=currentGame?.id,obj=currentObjectives.find(o=>o.id===id);
+ if(!gameId||!obj||obj.status==="retired")return;
+ if(!navigator.onLine){alert("Conéctate a internet para retirar objetivos.");return;}
+ const intro=hasHistory?"Este objetivo tiene capturas registradas y no se puede eliminar.\n\n":"";
+ if(!confirm(intro+'¿Retirar "'+obj.name+'"? Dejará de estar disponible para los jugadores y sus capturas seguirán en Resultados.'))return;
+ const {data,error}=await db.from("objectives").update({status:"retired"}).eq("id",id).eq("game_id",gameId).neq("status","retired").select("id");
+ if(error||!data?.length){alert("No se pudo retirar el objetivo: "+(error?.message||"Comprueba que siga activo y verifica tus permisos."));return;}
+ if(currentGame?.id===gameId){if(editingObjectiveId===id)cancelObjectiveLocation();await selectGame(gameId);}
+ alert("Objetivo retirado. No se borró ninguna captura.");
 }
 function editObjectiveLocation(id){const obj=currentObjectives.find(o=>o.id===id);if(!obj)return;editingObjectiveId=id;$("editObjectivePanel").classList.remove("hidden");$("editObjectiveName").textContent=obj.name;$("editObjLat").value=obj.latitude??"";$("editObjLng").value=obj.longitude??"";$("editObjectiveStatus").textContent="Toca el mapa para elegir el nuevo punto, o escribe las coordenadas.";if(mapAdmin&&obj.latitude!=null&&obj.longitude!=null)mapAdmin.setView([Number(obj.latitude),Number(obj.longitude)],Math.max(mapAdmin.getZoom(),16));updateAdminEditMarker();$("editObjectivePanel").scrollIntoView({behavior:"smooth",block:"nearest"});}
 function cancelObjectiveLocation(){editingObjectiveId=null;$("editObjectivePanel").classList.add("hidden");if(adminEditMarker&&mapAdmin){mapAdmin.removeLayer(adminEditMarker);adminEditMarker=null;}}
 function updateAdminEditMarker(){if(!mapAdmin)return;if(adminEditMarker){mapAdmin.removeLayer(adminEditMarker);adminEditMarker=null;}if(!editingObjectiveId)return;const lat=Number($("editObjLat").value),lng=Number($("editObjLng").value);if($("editObjLat").value!==""&&$("editObjLng").value!==""&&Number.isFinite(lat)&&Number.isFinite(lng))adminEditMarker=L.circleMarker([lat,lng],{radius:12,color:"#f1ca52",weight:3,fillColor:"#f1ca52",fillOpacity:.5}).addTo(mapAdmin).bindPopup("Nueva ubicación propuesta");}
 async function saveObjectiveLocation(){if(!editingObjectiveId||!currentGame)return;const lat=Number($("editObjLat").value),lng=Number($("editObjLng").value);if(!$("editObjLat").value.trim()||!$("editObjLng").value.trim()||!Number.isFinite(lat)||!Number.isFinite(lng)||lat< -90||lat>90||lng< -180||lng>180){$("editObjectiveStatus").textContent="Ingresa coordenadas válidas.";return;}if(!navigator.onLine){$("editObjectiveStatus").textContent="Conéctate a internet para guardar el cambio.";return;}const id=editingObjectiveId;$("editObjectiveStatus").textContent="Guardando nueva ubicación...";const {data,error}=await db.from("objectives").update({latitude:lat,longitude:lng}).eq("id",id).eq("game_id",currentGame.id).select("id").single();if(error||!data){$("editObjectiveStatus").textContent="No se pudo actualizar: "+(error?.message||"Verifica permisos de administrador.");return;}cancelObjectiveLocation();await selectGame(currentGame.id);alert("Ubicación actualizada. El QR y las asignaciones existentes no cambiaron. Los jugadores deben actualizar el mapa para ver el nuevo punto.");}
 function renderAdminMap(){
- if(!window.L)return;const pts=currentObjectives.filter(o=>o.latitude!=null&&o.longitude!=null);
+ if(!window.L)return;const pts=currentObjectives.filter(o=>o.status!=="retired"&&o.latitude!=null&&o.longitude!=null);
  if(!mapAdmin){mapAdmin=L.map("adminMap").setView(pts.length?[pts[0].latitude,pts[0].longitude]:[4.65,-74.1],pts.length?14:5);mapAdmin.on("click",e=>{if(!editingObjectiveId)return;$("editObjLat").value=e.latlng.lat.toFixed(7);$("editObjLng").value=e.latlng.lng.toFixed(7);$("editObjectiveStatus").textContent="Punto seleccionado. Pulsa GUARDAR NUEVA UBICACIÓN para confirmar.";updateAdminEditMarker();});setAdminSatellite(adminSatellite);}
  else{mapAdmin.eachLayer(l=>{if(l instanceof L.Marker||l instanceof L.Circle||l instanceof L.CircleMarker)mapAdmin.removeLayer(l);});adminEditMarker=null;}
  pts.forEach(o=>{
@@ -369,6 +382,10 @@ async function tacticalCheckCapturedObjectives(){
     changed=true;
     if(tacticalTarget?.objectiveId===obj.id||tacticalTarget?.id===obj.id){tacticalModelArrived=false;stopTacticalCamera();const s=$("arLoadStatus");if(s)s.textContent="Objetivo capturado: cámara desactivada.";}
    }
+   if(obj.status==="retired"&&(previous!==undefined?previous!=="retired":(snap?.objectives||[]).some(x=>x.id===obj.id&&x.status!=="retired"))){
+    changed=true;
+    if(tacticalTarget?.objectiveId===obj.id){tacticalModelArrived=false;stopTacticalCamera();tacticalTarget=null;const s=$("arLoadStatus");if(s)s.textContent="El administrador retiró este objetivo.";}
+   }
    tacticalCaptureSeen.set(key,obj.status);
   }
   if(changed)await loadPlayerGame();
@@ -401,9 +418,9 @@ async function loadPlayerGame(){
  ]);
  if(g.error||t.error||a.error||o.error){$("playerGameInfo").textContent="No se pudo cargar la operación.";return;}
  currentGame=g.data;currentTeams=[t.data];currentPlayers=[gp];
- const snap={gp,game:g.data,team:t.data,assignments:a.data||[],objectives:o.data||[]};
+ const snap={gp,game:g.data,team:t.data,assignments:(a.data||[]).filter(x=>x.objectives&&x.objectives.status!=="retired"),objectives:o.data||[]};
  localStorage.setItem("anubis_player_"+currentUser.id,JSON.stringify(snap));
- localStorage.setItem("anubis_tokens_"+gp.game_id,JSON.stringify((o.data||[]).filter(x=>x.token_hash).map(x=>({id:x.id,name:x.name,token_hash:x.token_hash,status:x.status}))));
+ localStorage.setItem("anubis_tokens_"+gp.game_id,JSON.stringify((o.data||[]).filter(x=>x.token_hash&&x.status!=="retired").map(x=>({id:x.id,name:x.name,token_hash:x.token_hash,status:x.status}))));
  renderPlayerSnapshot(snap,false);tacticalWatchCaptures(gp.game_id);await loadPlayerMap();
 }
 function renderPlayerSnapshot(snap,offline){
@@ -411,7 +428,7 @@ function renderPlayerSnapshot(snap,offline){
  currentGame=g;currentTeams=[t];currentPlayers=[gp];
  $("playerGameInfo").innerHTML="<b>"+escapeHtml(g.name)+"</b><br>Indicativo: "+escapeHtml(gp.callsign)+" · Equipo: "+escapeHtml(t.name)+" <span class='tag "+t.color+"'>"+(colors[t.color]||t.color)+"</span><br>Estado: "+g.status;
  $("playerStatus").textContent=offline?"MODO SIN CONEXIÓN. Los escaneos quedarán pendientes y se sincronizarán al recuperar internet.":(g.status==="active"?"Operación en curso. Mantén tu ubicación compartida para apoyar al equipo.":"La operación no está activa.");
- $("myObjectives").innerHTML=assignments.length?assignments.map(x=>{const o=x.objectives||{};const virtual=o.objective_type==="virtual";return '<div class="card"><div class="topline"><b>'+escapeHtml(o.name||"Misión")+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+(o.status==="captured"?"CAPTURADO":x.status.toUpperCase())+'</span></div>'+(x.is_secret?'<span class="tag yellow">MISIÓN SECRETA</span>':"")+'<p class="small">'+(virtual?"OBJETIVO VIRTUAL GPS · ":"OBJETIVO FÍSICO QR · ")+(o.latitude!=null?"GPS: "+Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+'</p>'+(o.visual_description?'<p>'+escapeHtml(o.visual_description)+'</p>':"")+(virtual&&o.status!=="captured"?'<button class="secondary" onclick="showAR(\''+encodeURIComponent(o.ar_asset_url||tacticalModels.crate)+'\',\''+escapeHtml(o.name)+'\',\''+o.id+'\')">📍 BUSCAR OBJETIVO ASIGNADO</button>':"")+(virtual&&o.status!=="captured"?'<button onclick="captureVirtualObjective(\''+o.id+'\')">CAPTURAR OBJETIVO VIRTUAL GPS</button>':"")+'</div>';}).join(""):"No tienes misiones asignadas todavía.";
+ $("myObjectives").innerHTML=assignments.length?assignments.map(x=>{const o=x.objectives||{};const virtual=o.objective_type==="virtual";return '<div class="card"><div class="topline"><b>'+escapeHtml(o.name||"Misión")+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+(o.status==="captured"?"CAPTURADO":x.status.toUpperCase())+'</span></div>'+(x.is_secret?'<span class="tag yellow">MISIÓN SECRETA</span>':"")+'<p class="small">'+(virtual?"OBJETIVO VIRTUAL GPS · ":"OBJETIVO FÍSICO QR · ")+(o.latitude!=null?"GPS: "+Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+'</p>'+(o.visual_description?'<p>'+escapeHtml(o.visual_description)+'</p>':"")+(virtual&&o.status==="available"?'<button class="secondary" onclick="showAR(\''+encodeURIComponent(o.ar_asset_url||tacticalModels.crate)+'\',\''+escapeHtml(o.name)+'\',\''+o.id+'\')">📍 BUSCAR OBJETIVO ASIGNADO</button>':"")+(virtual&&o.status==="available"?'<button onclick="captureVirtualObjective(\''+o.id+'\')">CAPTURAR OBJETIVO VIRTUAL GPS</button>':"")+'</div>';}).join(""):"No tienes misiones asignadas todavía.";
  $("arArea").textContent="Los modelos 3D se abrirán aquí cuando una misión tenga un archivo GLB/GLTF configurado por el administrador.";
 }
 let tacticalCameraStream=null;
@@ -466,7 +483,7 @@ async function showAR(url,name,objectiveId){
  const objective=assigned?.objectives;
  $("arArea").innerHTML='<h3>'+escapeHtml(name)+'</h3><p id="arLoadStatus" class="small">Comprobando el punto configurado por el administrador...</p><div id="arSearchContent"></div>';
  $("arArea").scrollIntoView({behavior:"smooth",block:"start"});
- if(!objective||objective.objective_type!=="virtual"||objective.latitude==null||objective.longitude==null){
+ if(!objective||objective.status!=="available"||objective.objective_type!=="virtual"||objective.latitude==null||objective.longitude==null){
   $("arLoadStatus").textContent="Objetivo sin ubicación GPS asignada. Contacta al administrador.";return;
  }
  if(currentGame?.status!=="active"||objective.status==="captured"){
@@ -498,7 +515,7 @@ function checkARGpsDistance(id){
  const status=$("arGpsStatus");if(!status)return;
  const snap=JSON.parse(localStorage.getItem("anubis_player_"+(currentUser?.id||""))||"null");
  const objective=snap?.assignments?.find(x=>x.objectives?.id===id)?.objectives;
- if(!objective||objective.latitude==null||objective.longitude==null){status.textContent="No se encontraron coordenadas para este objetivo.";return;}
+ if(!objective||objective.status!=="available"||objective.latitude==null||objective.longitude==null){status.textContent="No se encontraron coordenadas para este objetivo.";return;}
  if(!navigator.geolocation){status.textContent="El GPS no está disponible en este dispositivo.";return;}
  status.textContent="Obteniendo ubicación precisa...";
  navigator.geolocation.getCurrentPosition(p=>{
@@ -654,7 +671,7 @@ async function loadPlayerMap(fitView=true){
  if(navigator.onLine){
   const [o,l,p]=await Promise.all([db.from("objectives").select("name,latitude,longitude,status,radius_m").eq("game_id",currentGame.id).eq("status","available"),db.from("player_locations").select("user_id,latitude,longitude,updated_at").eq("game_id",currentGame.id),db.from("game_players").select("user_id,callsign").eq("game_id",currentGame.id).eq("team_id",currentProfile?.team_id||currentTeams[0]?.id).eq("status","active")]);
   objectives=o.data||[];const teamIds=new Set((p.data||[]).map(x=>x.user_id));locs=(l.data||[]).filter(x=>teamIds.has(x.user_id));names=new Map((p.data||[]).map(x=>[x.user_id,x.callsign]));
- }else{const snap=JSON.parse(localStorage.getItem("anubis_player_"+currentUser.id)||"null");objectives=(snap?.objectives||[]).filter(x=>x.status!=="captured");}
+ }else{const snap=JSON.parse(localStorage.getItem("anubis_player_"+currentUser.id)||"null");objectives=(snap?.objectives||[]).filter(x=>x.status==="available");}
  if(renderVersion!==playerMapRenderVersion)return;
  locs=locs.filter(x=>x.user_id!==currentUser.id&&Date.now()-new Date(x.updated_at).getTime()<120000);
  gpsObjectives=objectives;const pts=[...objectives.filter(x=>x.latitude!=null&&x.longitude!=null).map(x=>[Number(x.latitude),Number(x.longitude)]),...locs.map(x=>[Number(x.latitude),Number(x.longitude)])];
@@ -713,7 +730,7 @@ async function captureVirtualObjective(id){
 async function captureObjective(raw){
  const hash=await sha256(raw),known=JSON.parse(localStorage.getItem("anubis_tokens_"+(currentGame?.id||""))||"[]"),objective=known.find(x=>x.token_hash===hash);
  if(!objective){msg("captureMsg","QR no válido para esta operación.");return;}
- if(objective.status==="captured"){msg("captureMsg","Este objetivo ya figura como capturado.");return;}
+ if(objective.status!=="available"){msg("captureMsg","Este objetivo ya no está disponible.");return;}
  if(!navigator.onLine){
   const queue=JSON.parse(localStorage.getItem("anubis_capture_queue")||"[]");
   if(!queue.some(x=>x.token===raw&&x.game_id===currentGame.id))queue.push({token:raw,game_id:currentGame.id,objective_id:objective.id,name:objective.name,created_at:new Date().toISOString()});
