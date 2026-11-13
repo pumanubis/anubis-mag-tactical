@@ -370,7 +370,7 @@ async function showAR(url,name,objectiveId){
   }
   tacticalTarget={lat:p.coords.latitude,lon:p.coords.longitude,goalLat:Number(objective.latitude),goalLon:Number(objective.longitude)};
   $("arLoadStatus").textContent="Dentro de la zona asignada: "+distance+" m del punto (precisión GPS ±"+accuracy+" m). El GPS confirma la zona, no la posición exacta del objeto en la imagen. "+modeMessage;
-  $("arSearchContent").innerHTML='<div id="tacticalCameraStage" style="position:relative;height:380px;background:#273424;border-radius:12px;overflow:hidden"><video id="tacticalCameraVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:2"></video><model-viewer id="arModelViewer" src="'+escapeHtml(decodeURIComponent(url))+'" ar ar-modes="webxr scene-viewer quick-look" ar-placement="floor" ar-scale="fixed" scale="0.65 0.65 0.65" camera-controls shadow-intensity="1" shadow-softness="0.8" exposure="1.5" environment-image="neutral" camera-orbit="30deg 68deg 350%" field-of-view="30deg" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:transparent" alt="Modelo 3D del objetivo"></model-viewer></div><p class="small">RA ESPACIAL EXPERIMENTAL: apunta a una superficie plana y bien iluminada, mueve el celular lentamente en varias direcciones hasta que detecte el suelo y coloca la caja. Si queda flotando o se desplaza, reinicia la sesión de RA y vuelve a detectar el suelo. La ubicación es local: NO corresponde automáticamente al punto GPS del administrador. Usa la captura GPS como respaldo.</p><div id="tacticalDirection" class="card small">Rumbo al objetivo GPS</div><button id="tacticalCompassPermission" style="display:none" onclick="tacticalEnableDirection()">🧭 PERMITIR SENSOR (REQUERIDO POR iOS)</button><button onclick="launchTacticalAR()">📷 VER REFERENCIA EN CÁMARA</button><button onclick="captureVirtualObjective(\''+objectiveId+'\')">🎯 SOLICITAR CAPTURA GPS</button><button class="secondary" onclick="stopTacticalCamera()">CERRAR CÁMARA</button>';
+  $("arSearchContent").innerHTML='<div id="tacticalCameraStage" style="position:relative;height:380px;background:#273424;border-radius:12px;overflow:hidden"><video id="tacticalCameraVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:2"></video><model-viewer id="arModelViewer" src="'+escapeHtml(decodeURIComponent(url))+'" ar ar-modes="webxr scene-viewer quick-look" ar-placement="floor" ar-scale="fixed" scale="0.65 0.65 0.65" camera-controls shadow-intensity="1" shadow-softness="0.8" exposure="1.5" environment-image="neutral" camera-orbit="30deg 68deg 350%" field-of-view="30deg" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:transparent" alt="Modelo 3D del objetivo"></model-viewer></div><p class="small">RA espacial opcional: coloca el objeto en una superficie detectada. No está fijado a las coordenadas GPS del administrador; utiliza la brújula del mapa táctico para orientarte hacia ese punto.</p><div id="tacticalDirection" class="small">Rumbo al objetivo GPS</div><button onclick="launchNativeTacticalAR()">🥽 VER EN RA ESPACIAL (COLOCAR EN SUELO)</button><button id="tacticalCompassPermission" style="display:none" onclick="tacticalEnableDirection()">🧭 PERMITIR SENSOR (REQUERIDO POR iOS)</button><button onclick="launchTacticalAR()">📷 VER REFERENCIA EN CÁMARA</button><button onclick="captureVirtualObjective(\''+objectiveId+'\')">🎯 SOLICITAR CAPTURA GPS</button><button class="secondary" onclick="stopTacticalCamera()">CERRAR CÁMARA</button>';
   tacticalEnableDirection(true).then(()=>{const b=$("tacticalCompassPermission");if(b)b.style.display=tacticalCompassPermissionNeeded?"block":"none";});
   tacticalUpdateDirection();
   loadTacticalModelViewer().catch(e=>{$("arLoadStatus").textContent="No se pudo cargar el visor: "+e.message;});
@@ -448,13 +448,13 @@ function listenTacticalCompass(){
 function autoStartTacticalCompass(){
  const btn=$("compassEnableBtn");if(!btn)return;
  if(!window.DeviceOrientationEvent){btn.style.display="none";return;}
- if(typeof DeviceOrientationEvent.requestPermission==="function"){
+ if(typeof DeviceOrientationEvent.requestPermission==="function"&&/iPad|iPhone|iPod/.test(navigator.userAgent)){
   btn.style.display="inline-block";btn.textContent="PERMITIR SENSOR DE BRÚJULA";
  }else{btn.style.display="none";listenTacticalCompass();}
 }
 async function enableTacticalCompass(){
  try{
-  if(typeof DeviceOrientationEvent.requestPermission==="function"){
+  if(typeof DeviceOrientationEvent.requestPermission==="function"&&/iPad|iPhone|iPod/.test(navigator.userAgent)){
    const permission=await DeviceOrientationEvent.requestPermission();
    if(permission!=="granted")throw Error("Permiso denegado");
   }
