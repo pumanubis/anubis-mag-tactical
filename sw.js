@@ -8,6 +8,7 @@ self.addEventListener("fetch",event=>{
  if(req.method!=="GET")return;
  const url=new URL(req.url);
  const sameOrigin=url.origin===self.location.origin;
+ if(sameOrigin&&url.pathname.startsWith(new URL("./respawn/",self.registration.scope).pathname))return;
  const staticExternal=STATIC_HOSTS.includes(url.hostname);
  if(!sameOrigin&&!staticExternal)return;
  event.respondWith((async()=>{

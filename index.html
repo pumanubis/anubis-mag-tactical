@@ -41,6 +41,7 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 <label>PIN</label><input id="pin" type="password" inputmode="numeric" maxlength="4" placeholder="••••">
 <button id="loginBtn" style="width:100%" onclick="login()">INGRESAR</button><p id="loginMsg" class="status hidden"></p>
 <p class="small">Acceso personal · ANUBIS MAG MILSIM</p>
+<p class="small"><a style="color:#f1ca52" href="respawn/">Abrir Respawn de prueba (sin usar datos de Tactical)</a></p>
 </section>
 
 <section id="app" class="hidden">
@@ -92,7 +93,7 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 </section>
 
 <section id="playerView" class="hidden">
-<div class="panel"><h2>MI OPERACIÓN</h2><div id="playerGameInfo" class="muted">Cargando partida...</div><div id="playerStatus" class="status"></div></div>
+<div class="panel"><h2>MI OPERACIÓN</h2><div id="playerGameInfo" class="muted">Cargando partida...</div><div id="playerStatus" class="status"></div><p class="small"><a style="color:#f1ca52" href="respawn/">Abrir Respawn de prueba (sin usar datos de Tactical)</a></p></div>
 <div class="cols">
 <div class="panel"><h2>MIS OBJETIVOS / MISIONES</h2><div id="myObjectives"></div></div>
 <div class="panel"><h2>CAPTURAR OBJETIVO QR</h2><p class="muted">Escanea el código físico del objetivo. Una vez capturado, desaparece para todos los equipos.</p><button onclick="startScanner()">ACTIVAR CÁMARA Y ESCANEAR</button><button class="secondary" onclick="stopScanner()">DETENER CÁMARA</button><div id="reader"></div><p id="captureMsg" class="status hidden"></p></div>
