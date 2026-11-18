@@ -736,7 +736,7 @@ async function launchNativeTacticalAR(){
 }
 let compassObjectiveId=null,compassAssignedObjectives=[];
 let myGps=null,gpsWatchId=null,gpsLastSync=0,gpsLastMapRefresh=0,gpsLiveMarker=null,gpsLiveLine=null,gpsObjectives=[],gpsLiveBusy=false,gpsPollTimer=null,gpsPollBusy=false,gpsLastFixAt=0,gpsLastAccuracy=null;
-let tacticalSatellite=false,tacticalTileLayer=null,deviceHeading=null,compassEnabled=false,compassHandler=null,lastGpsPoint=null,compassLastRender=0;
+let tacticalSatellite=true,tacticalTileLayer=null,deviceHeading=null,compassEnabled=false,compassHandler=null,lastGpsPoint=null,compassLastRender=0;
 function setTacticalMapLayer(satellite){tacticalSatellite=satellite;if(!mapPlayer||!window.L)return;if(tacticalTileLayer)mapPlayer.removeLayer(tacticalTileLayer);tacticalTileLayer=L.tileLayer(satellite?"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}":"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:satellite?"Imagery © Esri, Maxar, Earthstar Geographics":"© OpenStreetMap",maxZoom:19}).addTo(mapPlayer);tacticalTileLayer.bringToBack();}
 function compassBearing(a,b){const rad=Math.PI/180,dlon=(b[1]-a[1])*rad,y=Math.sin(dlon)*Math.cos(b[0]*rad),x=Math.cos(a[0]*rad)*Math.sin(b[0]*rad)-Math.sin(a[0]*rad)*Math.cos(b[0]*rad)*Math.cos(dlon);return(Math.atan2(y,x)*180/Math.PI+360)%360;}
 function ownGpsMarkerStyle(){
