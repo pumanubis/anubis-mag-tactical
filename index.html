@@ -41,7 +41,7 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 <label>PIN</label><input id="pin" type="password" inputmode="numeric" maxlength="4" placeholder="••••">
 <button id="loginBtn" style="width:100%" onclick="login()">INGRESAR</button><p id="loginMsg" class="status hidden"></p>
 <p class="small">Acceso personal · ANUBIS MAG MILSIM</p>
-<p class="small"><a style="color:#f1ca52" href="respawn/">Abrir Respawn de prueba (sin usar datos de Tactical)</a></p>
+
 </section>
 
 <section id="app" class="hidden">
@@ -93,19 +93,38 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 </section>
 
 <section id="playerView" class="hidden">
-<div class="panel"><h2>MI OPERACIÓN</h2><div id="playerGameInfo" class="muted">Cargando partida...</div><div id="playerStatus" class="status"></div><p class="small"><a style="color:#f1ca52" href="respawn/">Abrir Respawn de prueba (sin usar datos de Tactical)</a></p></div>
+<div class="panel"><h2>MI OPERACIÓN</h2><div id="playerGameInfo" class="muted">Cargando partida...</div><div id="playerStatus" class="status"></div></div>
 <div class="cols">
 <div class="panel"><h2>MIS OBJETIVOS / MISIONES</h2><div id="myObjectives"></div></div>
 <div class="panel"><h2>CAPTURAR OBJETIVO QR</h2><p class="muted">Escanea el código físico del objetivo. Una vez capturado, desaparece para todos los equipos.</p><button onclick="startScanner()">ACTIVAR CÁMARA Y ESCANEAR</button><button class="secondary" onclick="stopScanner()">DETENER CÁMARA</button><div id="reader"></div><p id="captureMsg" class="status hidden"></p></div>
 </div>
 <div class="panel"><h2>MAPA TÁCTICO GPS</h2><div class="actions"><button class="secondary" onclick="setTacticalMapLayer(false)">MAPA NORMAL</button><button onclick="setTacticalMapLayer(true)">SATÉLITE</button></div><div id="playerMap"></div><div class="compass-wrap"><div class="compass-dial"><div id="compassArrow" class="compass-arrow">↑</div></div><div class="compass-info"><strong>BRÚJULA AL OBJETIVO</strong><div id="compassInfo">Activa tu GPS para localizar el objetivo.</div><button class="secondary" id="compassEnableBtn" onclick="enableTacticalCompass()">ACTIVAR BRÚJULA</button></div></div><p id="gpsNavigation" class="small" hidden></p><a id="gpsDirections" class="hidden" target="_blank" rel="noopener noreferrer" style="display:none;margin:8px 0;color:#f1ca52" href="#">ABRIR RUTA A PIE EN GOOGLE MAPS</a><div class="actions"><button id="gpsLiveBtn" onclick="toggleLiveGps()">INICIAR GPS EN VIVO</button><button class="secondary" onclick="loadPlayerMap()">ACTUALIZAR MAPA</button></div></div>
 <div id="playerArPanel" class="panel hidden"><h2>REALIDAD AUMENTADA</h2><div id="arArea" class="muted"></div></div>
+<section id="playerRespawnPanel" class="panel" aria-labelledby="playerRespawnTitle">
+<h2 id="playerRespawnTitle">RESPAWN</h2>
+<p class="small">Usa el cronómetro o valida el regreso a base sin salir de tu operación.</p>
+<iframe id="playerRespawnFrame" data-src="respawn/" title="Módulo Respawn del jugador" allow="camera 'self'; screen-wake-lock 'self'" style="display:block;width:100%;height:720px;border:0;border-radius:12px"></iframe>
+</section>
 </section>
 </section>
 </main>
 <footer>ANUBIS MAG TACTICAL · Sistema de operaciones MILSIM</footer>
 
 <script>
+function mountPlayerRespawn(){
+  const frame=document.getElementById("playerRespawnFrame");
+  if(frame&&!frame.hasAttribute("src"))frame.setAttribute("src",frame.dataset.src);
+}
+function unmountPlayerRespawn(){
+  const frame=document.getElementById("playerRespawnFrame");
+  if(frame)frame.removeAttribute("src");
+}
+window.addEventListener("message",event=>{
+  const frame=document.getElementById("playerRespawnFrame");
+  if(!frame||event.origin!==location.origin||event.source!==frame.contentWindow||event.data?.type!=="anubis-respawn-height")return;
+  const height=event.data.height;
+  if(Number.isFinite(height)&&height>=200&&height<=10000)frame.style.height=Math.ceil(height)+"px";
+});
 const SUPABASE_URL="https://qpdbswjjlpgczpubefst.supabase.co";
 const SUPABASE_KEY="sb_publishable_k-y-PRQyuSWGXiuyHqP5aw_RQlZySZ4";
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
@@ -137,11 +156,11 @@ async function enterApp(user){
   if(!profile)throw new Error("Conéctate una vez a internet para cargar tu perfil y preparar el modo sin conexión.");
  }
  currentProfile=profile;$("login").classList.add("hidden");$("app").classList.remove("hidden");$("welcome").textContent="BIENVENIDO, "+profile.nickname.toUpperCase();$("roleTag").textContent=profile.role==="admin"?"ADMINISTRADOR":"OPERADOR";
- if(profile.role==="admin"){$("adminView").classList.remove("hidden");$("playerView").classList.add("hidden");if(navigator.onLine)await loadGames();else $("gamesList").textContent="Sin conexión. Las operaciones se actualizarán al recuperar internet.";}
- else{$("playerView").classList.remove("hidden");autoStartTacticalCompass();$("adminView").classList.add("hidden");await loadPlayerGame();}
+ if(profile.role==="admin"){unmountPlayerRespawn();$("adminView").classList.remove("hidden");$("playerView").classList.add("hidden");if(navigator.onLine)await loadGames();else $("gamesList").textContent="Sin conexión. Las operaciones se actualizarán al recuperar internet.";}
+ else{$("playerView").classList.remove("hidden");mountPlayerRespawn();autoStartTacticalCompass();$("adminView").classList.add("hidden");await loadPlayerGame();}
  if(navigator.onLine)syncPendingCaptures();
 }
-async function logout(){if(compassHandler){window.removeEventListener("deviceorientation",compassHandler,true);window.removeEventListener("deviceorientationabsolute",compassHandler,true);compassHandler=null;}deviceHeading=null;compassEnabled=false;compassObjectiveId=null;compassAssignedObjectives=[];myGps=null;gpsLastFixAt=0;gpsLastAccuracy=null;stopLiveGps();stopTacticalCamera();tacticalTarget=null;$("arArea").textContent="";$("playerArPanel").classList.add("hidden");await stopScanner();await db.auth.signOut();currentUser=null;currentProfile=null;currentGame=null;$("app").classList.add("hidden");$("login").classList.remove("hidden");$("pin").value="";}
+async function logout(){unmountPlayerRespawn();if(compassHandler){window.removeEventListener("deviceorientation",compassHandler,true);window.removeEventListener("deviceorientationabsolute",compassHandler,true);compassHandler=null;}deviceHeading=null;compassEnabled=false;compassObjectiveId=null;compassAssignedObjectives=[];myGps=null;gpsLastFixAt=0;gpsLastAccuracy=null;stopLiveGps();stopTacticalCamera();tacticalTarget=null;$("arArea").textContent="";$("playerArPanel").classList.add("hidden");await stopScanner();await db.auth.signOut();currentUser=null;currentProfile=null;currentGame=null;$("app").classList.add("hidden");$("login").classList.remove("hidden");$("pin").value="";}
 async function createGame(){
  const name=$("gameName").value.trim(),count=Number($("teamCount").value);if(name.length<3){msg("createMsg","El nombre debe tener al menos 3 caracteres.");return;}
  try{const {data,error}=await db.rpc("create_game_with_teams",{p_name:name,p_team_count:count});if(error)throw error;$("gameName").value="";msg("createMsg","Partida creada con "+count+" equipos.");await loadGames();await selectGame(data);}
