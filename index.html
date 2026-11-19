@@ -52,7 +52,7 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 <div class="panel">
 <h2>CREAR PARTIDA</h2>
 <label>Nombre de la operación</label><input id="gameName" maxlength="80" placeholder="Ej. Operación Anubis">
-<label>Equipos</label><select id="teamCount"><option value="2">2 equipos</option><option value="3">3 equipos</option><option value="4">4 equipos</option></select>
+<label>Equipos</label><select id="teamCount"><option value="2">2 equipos · Alpha y Bravo</option><option value="3">3 equipos · Alpha, Bravo y Echo</option><option value="4">4 equipos · Alpha, Bravo, Echo y Delta</option></select>
 <button onclick="createGame()">CREAR PARTIDA</button><p id="createMsg" class="status hidden"></p>
 </div>
 <div class="panel">
@@ -137,7 +137,17 @@ const SUPABASE_URL="https://qpdbswjjlpgczpubefst.supabase.co";
 const SUPABASE_KEY="sb_publishable_k-y-PRQyuSWGXiuyHqP5aw_RQlZySZ4";
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let currentUser=null,currentProfile=null,currentGame=null,currentTeams=[],currentPlayers=[],currentObjectives=[],mapAdmin=null,mapPlayer=null,scanner=null,editingObjectiveId=null,adminSatellite=false,adminTileLayer=null,adminEditMarker=null;
-const colors={red:"Rojo",blue:"Azul",green:"Verde",yellow:"Amarillo"};
+const teamNameByColor=new Map([["red","Alpha"],["blue","Bravo"],["green","Echo"],["yellow","Delta"]]);
+const teamColorAlias=new Map([["rojo","red"],["azul","blue"],["verde","green"],["amarillo","yellow"]]);
+function teamLabel(team,fallback="Equipo"){
+ const name=String(team?.name||"").trim();
+ const raw=(team?.color||name).toLowerCase().trim().replace(/^equipo\s+/,"");
+ return teamNameByColor.get(teamColorAlias.get(raw)||raw)||name||fallback;
+}
+function historyTeamLabel(row){
+ const matching=currentTeams.find(t=>t.name===row.team_name);
+ return teamLabel(matching||{name:row.team_name},"Sin equipo");
+}
 const $=id=>document.getElementById(id);
 const msg=(id,text)=>{$(id).textContent=text;$(id).classList.remove("hidden")};
 const escapeHtml=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -184,8 +194,8 @@ async function selectGame(id){
  const [t,p,o]=await Promise.all([db.from("teams").select("*").eq("game_id",id).order("created_at"),db.from("game_players").select("*").eq("game_id",id).order("joined_at"),db.from("objectives").select("*").eq("game_id",id).order("created_at")]);
  if(t.error||p.error||o.error){alert((t.error||p.error||o.error).message);return;}
  currentTeams=t.data;currentPlayers=p.data;currentObjectives=o.data;$("gameAdmin").classList.remove("hidden");$("selectedGameName").textContent=game.name;$("selectedGameId").textContent="ID: "+game.id;renderAdminGameState();
- $("playerTeam").innerHTML=currentTeams.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join("");
- $("assignTeamsList").innerHTML=currentTeams.map(t=>'<label><input type="checkbox" value="'+t.id+'" style="width:auto" onchange="renderSequenceSteps()"> '+escapeHtml(t.name)+'</label>').join("");
+ $("playerTeam").innerHTML=currentTeams.map(x=>'<option value="'+x.id+'">'+escapeHtml(teamLabel(x))+'</option>').join("");
+ $("assignTeamsList").innerHTML=currentTeams.map(t=>'<label><input type="checkbox" value="'+t.id+'" style="width:auto" onchange="renderSequenceSteps()"> '+escapeHtml(teamLabel(t))+'</label>').join("");
  $("assignPlayer").innerHTML=currentPlayers.filter(x=>x.status==="active").map(x=>'<option value="'+x.id+'">'+escapeHtml(x.callsign)+'</option>').join("");
  renderManagePlayers();
  renderAdminObjectivesList();
@@ -307,7 +317,7 @@ function renderManagePlayers(){
   const card=document.createElement("div");card.className="card";
   const title=document.createElement("b");title.textContent=p.callsign;
   const info=document.createElement("div");info.className="small";
-  info.textContent=(currentTeams.find(t=>t.id===p.team_id)?.name||"Equipo")+" · "+(p.status==="active"?"Activo":"Retirado");
+  info.textContent=teamLabel(currentTeams.find(t=>t.id===p.team_id))+" · "+(p.status==="active"?"Activo":"Retirado");
   card.append(title,info);
   if(currentGame?.status!=="finished"){
    const actions=document.createElement("div");actions.className="actions";
@@ -469,7 +479,7 @@ function renderSequenceSteps(){
   if(rule.mode!=="selected")return;
   if(!teamIds.size){const hint=document.createElement("p");hint.textContent="Selecciona primero los equipos participantes.";card.append(hint);return;}
   for(const team of currentTeams.filter(t=>teamIds.has(t.id))){
-   const name=document.createElement("p");name.className="small";name.textContent=team.name;card.append(name);
+   const name=document.createElement("p");name.className="small";name.textContent=teamLabel(team);card.append(name);
    for(const p of currentPlayers.filter(p=>p.team_id===team.id&&p.status==="active")){
     const item=document.createElement("label"),box=document.createElement("input");
     box.type="checkbox";box.style.width="auto";box.checked=rule.players.has(p.id);
@@ -530,9 +540,9 @@ async function loadAdminCaptureHistory(){
  if(!currentGame||currentGame.id!==gameId)return;
  if(error){el.textContent="No se pudieron consultar los resultados: "+error.message;return;}
  if(!data?.length){el.textContent="Esta operación todavía no tiene capturas registradas.";return;}
- const totals={};data.forEach(x=>{const team=x.team_name||"Sin equipo";totals[team]=(totals[team]||0)+1;});
+ const totals=Object.create(null);data.forEach(x=>{const team=historyTeamLabel(x);totals[team]=(totals[team]||0)+1;});
  const summary=Object.entries(totals).sort((a,b)=>b[1]-a[1]).map(([team,n])=>'<span class="tag" style="margin:3px">'+escapeHtml(team)+': '+n+' objetivo(s)</span>').join("");
- const rows=data.map(x=>'<tr><td>'+escapeHtml(new Date(x.captured_at).toLocaleString("es-CO",{timeZone:"America/Bogota",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}))+'</td><td>'+escapeHtml(x.objective_name||"Objetivo")+'</td><td>'+escapeHtml(x.player_callsign||"Sin indicativo")+'</td><td>'+escapeHtml(x.team_name||"Sin equipo")+'</td><td>'+escapeHtml(x.capture_method==="gps"?"GPS":"QR")+'</td></tr>').join("");
+ const rows=data.map(x=>'<tr><td>'+escapeHtml(new Date(x.captured_at).toLocaleString("es-CO",{timeZone:"America/Bogota",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}))+'</td><td>'+escapeHtml(x.objective_name||"Objetivo")+'</td><td>'+escapeHtml(x.player_callsign||"Sin indicativo")+'</td><td>'+escapeHtml(historyTeamLabel(x))+'</td><td>'+escapeHtml(x.capture_method==="gps"?"GPS":"QR")+'</td></tr>').join("");
  el.innerHTML='<p><b>'+data.length+' captura(s) en esta operación</b></p><div>'+summary+'</div><div style="overflow-x:auto;margin-top:12px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Fecha / hora</th><th>Objetivo</th><th>Jugador</th><th>Equipo</th><th>Método</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 async function loadAssignedMissions(){
@@ -715,7 +725,8 @@ function renderPlayerSnapshot(snap,offline){
  compassAssignedObjectives=g.status==="active"?assignments.map(x=>x.objectives).filter(o=>o?.status==="available"&&o.latitude!=null&&o.longitude!=null):[];
  if(!compassAssignedObjectives.some(o=>o.id===compassObjectiveId))compassObjectiveId=null;
  refreshTacticalCompass();
- $("playerGameInfo").innerHTML="<b>"+escapeHtml(g.name)+"</b><br>Indicativo: "+escapeHtml(gp.callsign)+" · Equipo: "+escapeHtml(t.name)+" <span class='tag "+t.color+"'>"+(colors[t.color]||t.color)+"</span><br>Estado: "+g.status;
+ const teamTag=["red","blue","green","yellow"].includes(t.color)?t.color:"";
+ $("playerGameInfo").innerHTML="<b>"+escapeHtml(g.name)+"</b><br>Indicativo: "+escapeHtml(gp.callsign)+" · Equipo: <span class='tag "+teamTag+"'>"+escapeHtml(teamLabel(t))+"</span><br>Estado: "+g.status;
  $("playerStatus").textContent=offline?"MODO SIN CONEXIÓN. Los escaneos quedarán pendientes y se sincronizarán al recuperar internet.":(g.status==="active"?"Operación en curso. Mantén tu ubicación compartida para apoyar al equipo.":"La operación no está activa.");
  $("myObjectives").innerHTML=assignments.length?assignments.map(x=>{const o=x.objectives||{};const virtual=o.objective_type==="virtual";return '<div class="card"><div class="topline"><b>'+escapeHtml(o.name||"Misión")+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+(o.status==="captured"?"CAPTURADO":x.status.toUpperCase())+'</span></div>'+(x.is_secret?'<span class="tag yellow">MISIÓN SECRETA</span>':"")+'<p class="small">'+(virtual?"OBJETIVO VIRTUAL GPS · ":"OBJETIVO FÍSICO QR · ")+(o.latitude!=null?"GPS: "+Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+'</p>'+(o.visual_description?'<p>'+escapeHtml(o.visual_description)+'</p>':"")+(virtual&&g.status==="active"&&o.status==="available"?'<button class="secondary" onclick="showAR(\''+o.id+'\')">📍 BUSCAR OBJETIVO ASIGNADO</button>':"")+'</div>';}).join(""):"No tienes misiones asignadas todavía.";
  if(tacticalTarget&&(!tacticalCameraCapturing||g.status!=="active")&&(g.status!=="active"||!assignments.some(x=>x.objectives?.id===tacticalTarget.objectiveId&&x.objectives.status==="available")))closePlayerCamera();
