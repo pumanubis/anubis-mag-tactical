@@ -18,7 +18,7 @@ header .team-logo{display:block;width:108px;height:108px;max-width:32vw;object-f
 <select id="preparedGames"><option value="">Selecciona una partida guardada</option></select>
 <button id="loadPrepared" class="btn reset" type="button">📂 VER QR GUARDADOS</button>
 <p class="hint">Prepara e imprime en casa. En el campo utiliza exactamente los mismos QR. No generes una partida nueva para activar la anterior.</p>
-</div><div id="organizerQR" class="hidden"><p class="hint">1. Los jugadores escanean el QR de configuración antes de jugar:</p><div id="configQR" class="qrbox"></div><p class="hint">2. Coloca este QR en la base de respawn:</p><div id="baseQR" class="qrbox"></div><button id="printQR" class="btn reset">🖨️ IMPRIMIR CÓDIGOS</button></div></div></details></section><section id="scanner" class="panel hidden"><label>Escanea el QR colocado en la base</label><video id="video" playsinline muted autoplay></video><p id="scanmsg" class="scanmsg" aria-live="polite">Apunta la cámara al código QR.</p><button id="cancel" class="btn reset">CERRAR CÁMARA</button></section><footer>ANUBIS MAG TACTICAL · RESPAWN DE PRUEBA</footer></main><script src="qrgen.js"></script><script>
+</div><div id="organizerQR" class="hidden"><p class="qrInstruction"><strong>1. QR de configuración</strong> · Escanéalo antes de jugar con «Cargar partida (QR)».</p><div id="configQR" class="qrbox"></div><p class="qrInstruction"><strong>2. QR de base</strong> · Colócalo en la base. Escanéalo solo cuando estés en respawn.</p><div id="baseQR" class="qrbox"></div><button id="printQR" class="btn reset">🖨️ IMPRIMIR CÓDIGOS</button></div></div></details></section><section id="scanner" class="panel hidden" aria-labelledby="scanTitle"><h2 id="scanTitle" style="font-size:1rem;margin:0 0 8px">Escanear código QR</h2><video id="video" playsinline muted autoplay></video><p id="scanmsg" class="scanmsg" aria-live="polite">Apunta la cámara al código QR.</p><button id="cancel" class="btn reset">CERRAR CÁMARA</button></section><footer>ANUBIS MAG TACTICAL · RESPAWN DE PRUEBA</footer></main><script src="qrgen.js"></script><script>
 let gameToken=localStorage.getItem('tactical-respawn-trial-token')||'';let gameLabel=localStorage.getItem('tactical-respawn-trial-label')||'';let scanPurpose='base';const $=id=>document.getElementById(id);const fmt=s=>`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;let active=false,started=0,end=0,mode='time',audio=null,lastBeep=-1,wake=null,stream=null,scanTimer=null,detector=null;
 const LIVES_KEY='tactical-respawn-trial-lives';
 let livesState={gameId:'',mode:'unlimited',total:0,remaining:0};
@@ -78,6 +78,9 @@ async function scanFrame(){
 }
 async function startScan(){
   if(scanPurpose==='base'&&(!active||mode!=='base'))return;
+  const configScan=scanPurpose==='config';
+  $('scanTitle').textContent=configScan?'Escanea el QR de configuración':'Escanea el QR colocado en la base';
+  const instruction=configScan?'Apunta al primer QR, el de configuración (antes de jugar).':'Apunta al segundo QR, el colocado en la base.';
   $('scanner').classList.remove('hidden');$('scanmsg').textContent='Preparando cámara y lector QR...';
   try{
     if(!navigator.mediaDevices?.getUserMedia)throw new Error('La cámara requiere HTTPS o localhost y permiso del navegador.');
@@ -85,7 +88,7 @@ async function startScan(){
     if(!detector)await loadQrLibrary();
     stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
     $('video').srcObject=stream;await $('video').play();
-    $('scanmsg').textContent='Apunta la cámara al código QR físico de la base.';
+    $('scanmsg').textContent=instruction;
     scanTimer=setInterval(scanFrame,300);
   }catch(e){$('scanmsg').textContent=e.message||'No se pudo iniciar la cámara.';if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}}
 }
