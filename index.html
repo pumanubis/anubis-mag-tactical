@@ -81,6 +81,14 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 <label>Equipo</label><select id="playerTeam"></select>
 <button onclick="createPlayer()">REGISTRAR JUGADOR</button><p id="playerMsg" class="status hidden"></p>
 <hr><div id="playersList" class="muted">Selecciona una partida.</div>
+<form id="editPlayerForm" class="card hidden">
+ <h3>EDITAR JUGADOR</h3>
+ <label for="editPlayerUsername">Usuario de acceso</label><input id="editPlayerUsername" maxlength="32" autocomplete="off">
+ <p class="small" id="editPlayerHint"></p>
+ <label for="editPlayerTeam">Equipo</label><select id="editPlayerTeam" required></select>
+ <div class="actions"><button id="editPlayerSave" type="submit">GUARDAR CAMBIOS</button><button id="editPlayerCancel" type="button" class="secondary">CANCELAR</button></div>
+</form>
+<p id="managePlayerMsg" class="status hidden" aria-live="polite"></p>
 </div>
 </div>
 <div class="cols">
@@ -171,14 +179,15 @@ async function loadGames(){
  $("gamesList").innerHTML=data.length?data.map(g=>'<div class="card"><div class="topline"><b>'+escapeHtml(g.name)+'</b><span class="tag">'+escapeHtml(g.status)+'</span></div><p class="small">'+g.team_count+' equipos</p><button class="secondary" onclick="selectGame(\''+g.id+'\')">ABRIR OPERACIÓN</button></div>').join(""):"Aún no hay partidas creadas.";
 }
 async function selectGame(id){
+ if(editPlayerTarget&&editPlayerTarget.game_id!==id)closePlayerEditor();
  const {data:game,error}=await db.from("games").select("*").eq("id",id).single();if(error){alert(error.message);return;}currentGame=game;
  const [t,p,o]=await Promise.all([db.from("teams").select("*").eq("game_id",id).order("created_at"),db.from("game_players").select("*").eq("game_id",id).order("joined_at"),db.from("objectives").select("*").eq("game_id",id).order("created_at")]);
  if(t.error||p.error||o.error){alert((t.error||p.error||o.error).message);return;}
  currentTeams=t.data;currentPlayers=p.data;currentObjectives=o.data;$("gameAdmin").classList.remove("hidden");$("selectedGameName").textContent=game.name;$("selectedGameId").textContent="ID: "+game.id;renderAdminGameState();
  $("playerTeam").innerHTML=currentTeams.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join("");
  $("assignTeamsList").innerHTML=currentTeams.map(t=>'<label><input type="checkbox" value="'+t.id+'" style="width:auto" onchange="renderSequenceSteps()"> '+escapeHtml(t.name)+'</label>').join("");
- $("assignPlayer").innerHTML=currentPlayers.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.callsign)+'</option>').join("");
- $("playersList").innerHTML=currentPlayers.length?currentPlayers.map(p=>'<div class="card"><b>'+escapeHtml(p.callsign)+'</b><div class="small">'+(currentTeams.find(t=>t.id===p.team_id)?.name||"Equipo")+' · '+p.status+'</div></div>').join(""):"No hay jugadores registrados.";
+ $("assignPlayer").innerHTML=currentPlayers.filter(x=>x.status==="active").map(x=>'<option value="'+x.id+'">'+escapeHtml(x.callsign)+'</option>').join("");
+ renderManagePlayers();
  renderAdminObjectivesList();
  if(editingObjectiveId){const edited=currentObjectives.find(o=>o.id===editingObjectiveId);if(!edited)cancelObjectiveLocation();else $("editObjectiveName").textContent=edited.name;}
 
@@ -286,6 +295,87 @@ async function createObjective(){
 }
 async function sha256(v){const h=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v));return Array.from(new Uint8Array(h)).map(x=>x.toString(16).padStart(2,"0")).join("");}
 async function useCurrentPosition(latId,lngId){if(!navigator.geolocation){alert("Este navegador no ofrece GPS.");return;}navigator.geolocation.getCurrentPosition(p=>{$(latId).value=p.coords.latitude.toFixed(7);$(lngId).value=p.coords.longitude.toFixed(7);},e=>alert("No se pudo obtener la ubicación: "+e.message),{enableHighAccuracy:true,timeout:15000});}
+let editPlayerTarget=null,playerManageBusy=false,editPlayerRequest=0;
+function closePlayerEditor(){
+ editPlayerRequest++;editPlayerTarget=null;
+ $("editPlayerForm").classList.add("hidden");$("editPlayerUsername").value="";
+}
+function renderManagePlayers(){
+ const list=$("playersList");list.replaceChildren();
+ if(!currentPlayers.length){list.textContent="No hay jugadores registrados.";return;}
+ for(const p of currentPlayers){
+  const card=document.createElement("div");card.className="card";
+  const title=document.createElement("b");title.textContent=p.callsign;
+  const info=document.createElement("div");info.className="small";
+  info.textContent=(currentTeams.find(t=>t.id===p.team_id)?.name||"Equipo")+" · "+(p.status==="active"?"Activo":"Retirado");
+  card.append(title,info);
+  if(currentGame?.status!=="finished"){
+   const actions=document.createElement("div");actions.className="actions";
+   for(const [label,click] of [["EDITAR JUGADOR",()=>openPlayerEditor(p.id)],p.status==="active"?["QUITAR DE LA PARTIDA",()=>changePlayerMembership(p.id,"remove")]:["REINCORPORAR",()=>changePlayerMembership(p.id,"restore")]]){
+    const btn=document.createElement("button");btn.type="button";btn.className="secondary";btn.textContent=label;btn.onclick=click;actions.append(btn);
+   }
+   card.append(actions);
+  }
+  list.append(card);
+ }
+}
+async function managePlayerRequest(body){
+ const {data,error}=await db.functions.invoke("admin-manage-player",{body});
+ if(error){
+  let detail="";
+  if(error.context&&typeof error.context.json==="function"){try{const result=await error.context.json();detail=result?.error||"";}catch(_){}}
+  throw new Error(detail||"No se pudo gestionar el jugador. Verifica la conexión.");
+ }
+ if(!data?.success)throw new Error(data?.error||"No se pudo gestionar el jugador.");
+ return data;
+}
+async function openPlayerEditor(id){
+ if(playerManageBusy||!currentGame||currentGame.status==="finished")return;
+ const p=currentPlayers.find(player=>player.id===id);if(!p)return;
+ closePlayerEditor();
+ const request=editPlayerRequest,game_id=currentGame.id;
+ msg("managePlayerMsg","Cargando datos del jugador...");
+ try{
+  const result=await managePlayerRequest({action:"read",game_id,player_id:id});
+  if(request!==editPlayerRequest||currentGame?.id!==game_id)return;
+  editPlayerTarget={game_id,player_id:id,can_rename:result.can_rename};
+  $("editPlayerUsername").value=result.username||p.callsign;
+  $("editPlayerUsername").disabled=!result.can_rename;
+  $("editPlayerHint").textContent=result.can_rename?"El PIN del jugador no cambia.":"El usuario no se puede cambiar desde esta partida. Puedes corregir el equipo.";
+  $("editPlayerTeam").innerHTML=$("playerTeam").innerHTML;
+  $("editPlayerTeam").value=p.team_id;
+  $("editPlayerForm").classList.remove("hidden");
+  $("managePlayerMsg").classList.add("hidden");
+  $("editPlayerForm").scrollIntoView({block:"nearest"});
+ }catch(e){if(request===editPlayerRequest&&currentGame?.id===game_id)msg("managePlayerMsg",e.message);}
+}
+async function savePlayerEdit(event){
+ event.preventDefault();const target=editPlayerTarget;
+ if(playerManageBusy||!target||currentGame?.id!==target.game_id)return;
+ const username=$("editPlayerUsername").value.trim().toLowerCase();
+ if(target.can_rename&&!/^[a-z0-9_-]{3,32}$/.test(username)){msg("managePlayerMsg","Usa de 3 a 32 letras, números, guiones o guiones bajos.");return;}
+ const team_id=$("editPlayerTeam").value;
+ if(!currentTeams.some(t=>t.id===team_id)){msg("managePlayerMsg","Selecciona un equipo de esta partida.");return;}
+ playerManageBusy=true;$("editPlayerSave").disabled=true;
+ try{
+  await managePlayerRequest({action:"edit",game_id:target.game_id,player_id:target.player_id,team_id,username:target.can_rename?username:null});
+  if(currentGame?.id===target.game_id){closePlayerEditor();await selectGame(target.game_id);msg("managePlayerMsg","Datos del jugador actualizados.");}
+ }catch(e){if(currentGame?.id===target.game_id)msg("managePlayerMsg",e.message);}
+ finally{playerManageBusy=false;$("editPlayerSave").disabled=false;}
+}
+async function changePlayerMembership(id,action){
+ if(playerManageBusy||!currentGame||currentGame.status==="finished")return;
+ const p=currentPlayers.find(player=>player.id===id);if(!p)return;
+ if(!confirm(action==="remove"?"¿Quitar a "+p.callsign+" de esta partida? Se conservan su cuenta y su historial.":"¿Reincorporar a "+p.callsign+" a esta partida? Volverá a tener sus asignaciones."))return;
+ const game_id=currentGame.id;playerManageBusy=true;closePlayerEditor();
+ try{
+  await managePlayerRequest({action,game_id,player_id:id});
+  if(currentGame?.id===game_id){await selectGame(game_id);msg("managePlayerMsg",action==="remove"?"Jugador retirado de esta partida.":"Jugador reincorporado.");}
+ }catch(e){if(currentGame?.id===game_id)msg("managePlayerMsg",e.message);}
+ finally{playerManageBusy=false;}
+}
+$("editPlayerForm").addEventListener("submit",savePlayerEdit);
+$("editPlayerCancel").onclick=closePlayerEditor;
 async function createPlayer(){
  if(!currentGame){msg("playerMsg","Selecciona una partida.");return;}
  const body={callsign:$("playerUsername").value.trim().toLowerCase(),username:$("playerUsername").value.trim().toLowerCase(),pin:$("playerPin").value,team_id:$("playerTeam").value,game_id:currentGame.id};
@@ -406,7 +496,7 @@ async function assignObjectives(){
   if(teams.some(t=>!players.some(p=>p.team_id===t))){msg("assignMsg","Todos los equipos seleccionados deben tener jugadores activos.");return;}
  }else{
   const id=$("assignPlayer").value;
-  if(!id){msg("assignMsg","Selecciona un jugador.");return;}
+  if(!id||!currentPlayers.some(p=>p.id===id&&p.status==="active")){msg("assignMsg","Selecciona un jugador activo.");return;}
   players=[{id}];
  }
  if(sequence){
