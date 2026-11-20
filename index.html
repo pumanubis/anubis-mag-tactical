@@ -164,7 +164,7 @@ if(new URLSearchParams(location.search).get("modo")==="objetivo"&&location.hash.
 </main>
 <footer>ANUBIS MAG TACTICAL · Sistema de operaciones MILSIM</footer>
 
-<script src="./mobile-objective.js?v=1"></script>
+<script src="./mobile-objective.js?v=2"></script>
 <script>
 function mountPlayerRespawn(){
   const frame=document.getElementById("playerRespawnFrame");
@@ -987,7 +987,7 @@ function compassMissionTarget(position){
  const toPoint=o=>({name:o.name,p:[Number(o.latitude),Number(o.longitude)]});
  const chosen=compassAssignedObjectives.find(o=>o.id===compassObjectiveId);
  if(chosen)return toPoint(chosen);
- return compassAssignedObjectives.map(toPoint).sort((a,b)=>metersBetween(position,a.p)-metersBetween(position,b.p))[0];
+ return compassAssignedObjectives.map(toPoint).sort((a,b)=>metersBetween(position,a.p)-metersBetween(position,b.p))[0] || mobileTactical?.compassTarget?.();
 }
 function refreshTacticalCompass(){
  const arrow=$("compassArrow"),info=$("compassInfo");if(!arrow||!info)return;
@@ -1198,7 +1198,7 @@ async function syncPendingCaptures(){
  else msg("captureMsg",remaining.length+" captura(s) siguen pendientes de validación. Revisa conexión y vuelve a intentar.");
 }
 const mobileOptions={db,url:SUPABASE_URL,key:SUPABASE_KEY,map:view=>view==="admin"?mapAdmin:mapPlayer,
- game:()=>currentGame,position:()=>myGps,distance:metersBetween};
+ game:()=>currentGame,position:()=>myGps,distance:metersBetween,refreshCompass:refreshTacticalCompass};
 const isMobileDevice=new URLSearchParams(location.search).get("modo")==="objetivo";
 const mobileTactical=!isMobileDevice&&window.AnubisMobileObjective?window.AnubisMobileObjective.tactical(mobileOptions):null;
 if(isMobileDevice){if(window.AnubisMobileObjective)window.AnubisMobileObjective.device(mobileOptions);else{ $("login").classList.add("hidden");$("mobileDevice").classList.remove("hidden");$("mobileDeviceStatus").textContent="No se pudo cargar el módulo. Conéctate y vuelve a abrir Tactical."; }}

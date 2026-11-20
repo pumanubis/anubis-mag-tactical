@@ -33,8 +33,19 @@
    $("mobileAdminClose").disabled=false;
    $("mobileInitialLat").value=""; $("mobileInitialLng").value=""; $("mobileMinutes").value="30";
   }
+  function objectivePoint(){
+   const state=stateOf(objective);
+   if(state!=="ready" && state!=="live")return null;
+   if(state==="live" && (performance.now()-lastSync>16000 || !navigator.onLine))return null;
+   return Number.isFinite(objective.lat) && Number.isFinite(objective.lng) ? [objective.lat,objective.lng] : null;
+  }
+  function compassTarget(){
+   if(view!=="player" || !objective?.game_active)return null;
+   const p=objectivePoint();
+   return p ? {name:"Objetivo móvil",p} : null;
+  }
   function draw() {
-   const state=stateOf(objective), live=state==="live", stale=live && (performance.now()-lastSync > 16000 || !navigator.onLine);
+   const state=stateOf(objective), live=state==="live", point=objectivePoint();
    if(view==="player") {
     const visible=!!state;
     $("mobilePlayer").hidden=!visible;
@@ -42,9 +53,9 @@
     if(visible) {
      $("mobilePlayerState").textContent=label(state);
      const p=opts.position();
-     const dist=p && objective.lat!=null && !stale && state!=="finished" ? " · "+Math.round(opts.distance(p,[objective.lat,objective.lng]))+" m" : "";
+     const dist=p && point ? " · "+Math.round(opts.distance(p,point))+" m" : "";
      $("mobilePlayerInfo").textContent=state==="ready" ? "Busca el celular en el punto marcado. Actívalo en ese mismo dispositivo"+dist+"."
-      : live ? time(objective.deadline-performance.now())+" restantes · "+(objective.lat==null || stale ? "Ubicación temporalmente no disponible" : "Ubicación en directo"+dist)
+      : live ? time(objective.deadline-performance.now())+" restantes · "+(!point ? "Ubicación temporalmente no disponible" : "Ubicación en directo"+dist)
       : "Terminó el seguimiento. El árbitro confirma quién tenía el celular.";
     }
    }
@@ -56,7 +67,7 @@
     if(state==="finished")$("mobileLinkBox").hidden=true;
    }
    const nextMap=view && opts.map(view);
-   const point=state && state!=="finished" && !stale && objective.lat!=null && objective.lng!=null ? [objective.lat,objective.lng] : null;
+   if(view==="player")opts.refreshCompass?.();
    if(view==="player")$("mobileShowPoint").hidden=!point || !nextMap;
    if(map!==nextMap || !point || !marker || !nextMap?.hasLayer(marker)){marker?.remove();marker=null;map=nextMap;}
    if(point && map && window.L){
@@ -146,7 +157,7 @@
   setInterval(poll,5000);
   window.addEventListener("online",poll);
   document.addEventListener("visibilitychange",poll);
-  return {attach,detach,draw,poll,pick};
+  return {attach,detach,draw,poll,pick,compassTarget};
  }
 
  function device(opts) {
