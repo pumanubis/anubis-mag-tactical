@@ -24,8 +24,9 @@ jobs:
             fs.writeFileSync(file, match[1]);
             require('node:child_process').execFileSync(process.execPath, ['--check', file], {stdio:'inherit'});
           });
-          for (const marker of ['create_game_with_teams','admin-create-player','capture-objective','manifest.webmanifest']) {
+          for (const marker of ['create_game_with_teams','admin-create-player','capture_qr_objective','capture_virtual_objective','mobile-objective.js','manifest.webmanifest']) {
             if (!html.includes(marker)) throw new Error('Missing app integration: ' + marker);
           }
+          require('node:child_process').execFileSync(process.execPath, ['--check', 'mobile-objective.js'], {stdio:'inherit'});
           console.log('ANUBIS MAG TACTICAL: JavaScript syntax and app integrations OK');
           NODE
