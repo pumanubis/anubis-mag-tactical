@@ -1,5 +1,5 @@
-const CACHE_NAME="anubis-tactical-v3";
-const APP_FILES=["./","./index.html","./manifest.webmanifest","./anubis-mag-logo-oliva.png.png"];
+const CACHE_NAME="anubis-tactical-v4";
+const APP_FILES=["./","./index.html","./mobile-objective.js?v=1","./manifest.webmanifest","./anubis-mag-logo-oliva.png.png"];
 const STATIC_HOSTS=["cdn.jsdelivr.net","unpkg.com","cdnjs.cloudflare.com","tile.openstreetmap.org"];
 self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(APP_FILES)).then(()=>self.skipWaiting()));});
 self.addEventListener("activate",event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith("anubis-tactical-")&&k!==CACHE_NAME).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});

@@ -26,7 +26,23 @@ button.secondary{background:#394735;border:1px solid #66765b}button.danger{backg
 hr{border:0;border-top:1px solid var(--line);margin:14px 0}
 footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 @media(min-width:700px){.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}.cols .panel{margin:0 0 14px}}
- .compass-wrap{display:flex;align-items:center;gap:16px;padding:12px;border:1px solid #4b5a42;border-radius:12px;margin:10px 0}.compass-dial{width:92px;height:92px;border:2px solid #d5bd68;border-radius:50%;display:grid;place-items:center;position:relative;flex-shrink:0}.compass-dial:before{content:"N";position:absolute;top:3px;font-size:11px;color:#d5bd68}.compass-arrow{font-size:54px;color:#f1ca52;line-height:1;transition:transform .3s ease}.compass-info{font-size:13px;line-height:1.6} </style>
+ .compass-wrap{display:flex;align-items:center;gap:16px;padding:12px;border:1px solid #4b5a42;border-radius:12px;margin:10px 0}.compass-dial{width:92px;height:92px;border:2px solid #d5bd68;border-radius:50%;display:grid;place-items:center;position:relative;flex-shrink:0}.compass-dial:before{content:"N";position:absolute;top:3px;font-size:11px;color:#d5bd68}.compass-arrow{font-size:54px;color:#f1ca52;line-height:1;transition:transform .3s ease}.compass-info{font-size:13px;line-height:1.6} [hidden]{display:none!important}
+.mobile-map-icon{display:grid;place-items:center;background:#213623;border:2px solid #d5bd68;border-radius:50%;font-size:20px;box-shadow:0 2px 8px #0008}
+.mobile-present #myObjectives[data-empty="true"]{display:none}
+#mobileDevice{max-width:500px;margin:22px auto;text-align:center}
+#mobileDeviceClock{font-size:clamp(2.8rem,12vw,5rem);font-weight:800;font-variant-numeric:tabular-nums;color:var(--gold);margin:12px}
+#mobileActivate{width:100%;min-height:58px}
+</style>
+<script>
+if(new URLSearchParams(location.search).get("modo")==="objetivo"&&location.hash.startsWith("#objetivo=")){
+ const pairing=location.hash.slice(10);
+ try{
+  sessionStorage.removeItem("anubis-mobile-device");
+  if(/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\.[a-f0-9]{64}$/i.test(pairing))sessionStorage.setItem("anubis-mobile-device",pairing);
+ }catch{}
+ history.replaceState(null,"",location.pathname+location.search);
+}
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -35,6 +51,13 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 <body>
 <header><img src="anubis-mag-logo-oliva.png.png" alt="ANUBIS MAG MILSIM"><h1>ANUBIS MAG</h1><p>TACTICAL SYSTEM · AIRSOFT MILSIM</p></header>
 <main>
+<section class="panel hidden" id="mobileDevice" aria-labelledby="mobileDeviceTitle">
+ <h2 id="mobileDeviceTitle">📱 OBJETIVO MÓVIL</h2>
+ <div id="mobileDeviceClock" role="timer">--:--</div>
+ <p id="mobileDeviceStatus">Verificando el enlace…</p>
+ <button id="mobileActivate" type="button" hidden>ACTIVAR OBJETIVO</button>
+ <p class="small">Después de activar, deja Tactical abierto en este celular. Se compartirá su GPS con los equipos de la partida hasta que termine el tiempo. Sube el volumen multimedia y mantén internet activo.</p>
+</section>
 <section id="login" class="panel" style="max-width:440px;margin:22px auto">
 <h2>ACCESO TÁCTICO</h2><p class="muted">Ingresa con tu usuario y PIN de cuatro dígitos.</p>
 <label>Usuario</label><input id="username" autocomplete="username" maxlength="32" placeholder="Usuario">
@@ -95,6 +118,29 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 <div class="panel"><h2>ASIGNAR OBJETIVOS</h2><label>Modalidad</label><select id="assignMode" onchange="updateAssignmentMode()"><option value="player">MISIÓN INDIVIDUAL</option><option value="teams">OBJETIVO EN DISPUTA (EQUIPOS)</option></select><div id="assignPlayerBox"><label>Jugador</label><select id="assignPlayer"></select></div><div id="assignTeamsBox" style="display:none"><label>Equipos participantes</label><div id="assignTeamsList"></div><p class="small">Mismo objetivo para los jugadores activos de los equipos seleccionados. Gana el primero en capturarlo.</p></div><label><input id="assignSequence" type="checkbox" style="width:auto" onchange="renderAssignableObjectives()"> Secuencia automática</label><p id="assignSequenceHint" class="small hidden">Marca los objetivos en el orden en que deben jugarse. Solo se abre el primero. Cada captura confirmada abre el siguiente paso para los operadores habilitados en ese paso.</p><label>Objetivos</label><div id="assignObjectives" class="muted"></div><div id="sequenceSteps" aria-label="Orden y participantes de la secuencia"></div><label id="assignSecretLabel"><input id="assignSecret" type="checkbox" style="width:auto"> Marcar como misión secreta</label><button onclick="assignObjectives()">ASIGNAR MISIONES</button><p id="assignMsg" class="status hidden"></p><div id="assignedMissions"></div></div>
 <div class="panel"><h2>MAPA DE OPERACIONES</h2><div class="actions"><button class="secondary" onclick="setAdminSatellite(false)">MAPA NORMAL</button><button onclick="setAdminSatellite(true)">SATÉLITE</button></div><div id="adminMap"></div><p class="small">Los marcadores representan objetivos con coordenadas GPS. Desde el computador, arrastra un marcador hasta el lugar deseado. Después confirma con GUARDAR NUEVA UBICACIÓN. También puedes hacer clic en un marcador para editarlo.</p></div>
 </div>
+<section class="panel" aria-labelledby="mobileAdminTitle">
+ <div class="topline"><h2 id="mobileAdminTitle">📱 OBJETIVO MÓVIL</h2><span class="tag" id="mobileAdminState">Sin configurar</span></div>
+ <p class="small">Un celular en el campo, visible para todos los equipos. Se activa en el propio celular, sin QR.</p>
+ <form id="mobileAdminForm">
+  <div class="row">
+   <div><label for="mobileInitialLat">Latitud inicial</label><input id="mobileInitialLat" type="number" step="any" min="-90" max="90" required></div>
+   <div><label for="mobileInitialLng">Longitud inicial</label><input id="mobileInitialLng" type="number" step="any" min="-180" max="180" required></div>
+  </div>
+  <label for="mobileMinutes">Duración continua</label><select id="mobileMinutes"><option value="20">20 minutos</option><option value="30" selected>30 minutos</option><option value="40">40 minutos</option><option value="50">50 minutos</option><option value="60">60 minutos</option></select>
+  <div class="actions">
+   <button id="mobilePickPoint" type="button" class="secondary">ELEGIR EN EL MAPA</button>
+   <button type="button" class="secondary" onclick="useCurrentPosition('mobileInitialLat','mobileInitialLng')">USAR MI GPS</button>
+   <button id="mobileAdminSave" type="submit">GUARDAR Y CREAR ENLACE</button>
+   <button id="mobileAdminClose" type="button" class="secondary" hidden>FINALIZAR OBJETIVO</button>
+  </div>
+ </form>
+ <p id="mobileAdminStatus" class="small" role="status"></p>
+ <div id="mobileLinkBox" class="card" hidden>
+  <label for="mobilePrivateLink">Enlace privado del celular objetivo</label>
+  <input type="text" id="mobilePrivateLink" readonly autocomplete="off" spellcheck="false">
+  <button type="button" class="secondary" id="mobileCopyLink">COPIAR ENLACE</button>
+ </div>
+</section>
 <div class="panel"><h2>RESULTADOS DE LA OPERACIÓN</h2><p class="small">Solo capturas de la partida seleccionada. Las pruebas de otras partidas no se mezclan.</p><button class="secondary" onclick="loadAdminCaptureHistory()">ACTUALIZAR RESULTADOS</button><div id="adminCaptureHistory" class="small">Abre una operación para consultar sus resultados.</div></div>
 <div class="panel"><h2>OBJETIVOS CREADOS</h2><label><input type="checkbox" id="showCapturedObjectives" style="width:auto" onchange="renderAdminObjectivesList()"> MOSTRAR CAPTURADOS Y RETIRADOS (HISTORIAL)</label><div id="objectivesList"></div><div id="editObjectivePanel" class="card hidden"><h2>EDITAR UBICACIÓN DEL OBJETIVO</h2><p id="editObjectiveName" class="gold"></p><p class="small">Escribe coordenadas o toca un punto del mapa de operaciones. El QR y las asignaciones se conservarán.</p><div class="row"><div><label>Latitud</label><input id="editObjLat" type="number" step="any"></div><div><label>Longitud</label><input id="editObjLng" type="number" step="any"></div></div><div class="actions"><button class="secondary" onclick="useCurrentPosition('editObjLat','editObjLng')">USAR MI GPS</button><button onclick="saveObjectiveLocation()">GUARDAR NUEVA UBICACIÓN</button><button class="secondary" onclick="cancelObjectiveLocation()">CANCELAR</button></div><p id="editObjectiveStatus" class="small"></p></div></div>
 </div>
@@ -103,7 +149,7 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 <section id="playerView" class="hidden">
 <div class="panel"><h2>MI OPERACIÓN</h2><div id="playerGameInfo" class="muted">Cargando partida...</div><div id="playerStatus" class="status"></div></div>
 <div class="cols">
-<div class="panel"><h2>MIS OBJETIVOS / MISIONES</h2><div id="myObjectives"></div></div>
+<div class="panel"><h2>MIS OBJETIVOS / MISIONES</h2><div id="myObjectives"></div><article id="mobilePlayer" class="card" hidden><div class="topline"><b>📱 Objetivo móvil</b><span id="mobilePlayerState" class="tag"></span></div><p id="mobilePlayerInfo" class="small"></p><button id="mobileShowPoint" type="button" class="secondary" hidden>VER EN EL MAPA</button></article></div>
 <div class="panel"><h2>CAPTURAR OBJETIVO QR</h2><p class="muted">Escanea el código físico del objetivo. Una vez capturado, desaparece para todos los equipos.</p><button onclick="startScanner()">ACTIVAR CÁMARA Y ESCANEAR</button><button class="secondary" onclick="stopScanner()">DETENER CÁMARA</button><div id="reader"></div><p id="captureMsg" class="status hidden"></p></div>
 </div>
 <div class="panel"><h2>MAPA TÁCTICO GPS</h2><div class="actions"><button class="secondary" onclick="setTacticalMapLayer(false)">MAPA NORMAL</button><button onclick="setTacticalMapLayer(true)">SATÉLITE</button></div><div id="playerMap"></div><div class="compass-wrap"><div class="compass-dial"><div id="compassArrow" class="compass-arrow">↑</div></div><div class="compass-info"><strong>BRÚJULA AL OBJETIVO</strong><div id="compassInfo">Activa tu GPS para localizar el objetivo.</div><button class="secondary" id="compassEnableBtn" onclick="enableTacticalCompass()">ACTIVAR BRÚJULA</button></div></div><p id="gpsNavigation" class="small" hidden></p><a id="gpsDirections" class="hidden" target="_blank" rel="noopener noreferrer" style="display:none;margin:8px 0;color:#f1ca52" href="#">ABRIR RUTA A PIE EN GOOGLE MAPS</a><div class="actions"><button id="gpsLiveBtn" onclick="toggleLiveGps()">INICIAR GPS EN VIVO</button><button class="secondary" onclick="loadPlayerMap()">ACTUALIZAR MAPA</button></div></div>
@@ -118,6 +164,7 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 </main>
 <footer>ANUBIS MAG TACTICAL · Sistema de operaciones MILSIM</footer>
 
+<script src="./mobile-objective.js?v=1"></script>
 <script>
 function mountPlayerRespawn(){
   const frame=document.getElementById("playerRespawnFrame");
@@ -178,7 +225,7 @@ async function enterApp(user){
  else{$("playerView").classList.remove("hidden");mountPlayerRespawn();autoStartTacticalCompass();$("adminView").classList.add("hidden");await loadPlayerGame();}
  if(navigator.onLine)syncPendingCaptures();
 }
-async function logout(){unmountPlayerRespawn();if(compassHandler){window.removeEventListener("deviceorientation",compassHandler,true);window.removeEventListener("deviceorientationabsolute",compassHandler,true);compassHandler=null;}deviceHeading=null;compassEnabled=false;compassObjectiveId=null;compassAssignedObjectives=[];myGps=null;gpsLastFixAt=0;gpsLastAccuracy=null;stopLiveGps();stopTacticalCamera();tacticalTarget=null;$("arArea").textContent="";$("playerArPanel").classList.add("hidden");await stopScanner();await db.auth.signOut();currentUser=null;currentProfile=null;currentGame=null;$("app").classList.add("hidden");$("login").classList.remove("hidden");$("pin").value="";}
+async function logout(){mobileTactical?.detach();unmountPlayerRespawn();if(compassHandler){window.removeEventListener("deviceorientation",compassHandler,true);window.removeEventListener("deviceorientationabsolute",compassHandler,true);compassHandler=null;}deviceHeading=null;compassEnabled=false;compassObjectiveId=null;compassAssignedObjectives=[];myGps=null;gpsLastFixAt=0;gpsLastAccuracy=null;stopLiveGps();stopTacticalCamera();tacticalTarget=null;$("arArea").textContent="";$("playerArPanel").classList.add("hidden");await stopScanner();await db.auth.signOut();currentUser=null;currentProfile=null;currentGame=null;$("app").classList.add("hidden");$("login").classList.remove("hidden");$("pin").value="";}
 async function createGame(){
  const name=$("gameName").value.trim(),count=Number($("teamCount").value);if(name.length<3){msg("createMsg","El nombre debe tener al menos 3 caracteres.");return;}
  try{const {data,error}=await db.rpc("create_game_with_teams",{p_name:name,p_team_count:count});if(error)throw error;$("gameName").value="";msg("createMsg","Partida creada con "+count+" equipos.");await loadGames();await selectGame(data);}
@@ -202,7 +249,7 @@ async function selectGame(id){
  if(editingObjectiveId){const edited=currentObjectives.find(o=>o.id===editingObjectiveId);if(!edited)cancelObjectiveLocation();else $("editObjectiveName").textContent=edited.name;}
 
  renderAssignableObjectives();
- await loadAssignedMissions();await loadAdminCaptureHistory();renderAdminMap();
+ await loadAssignedMissions();await loadAdminCaptureHistory();renderAdminMap();mobileTactical?.attach("admin",id);
 }
 let gameAdminBusy=false;
 function renderAdminGameState(){
@@ -228,7 +275,7 @@ async function setGameStatus(status){
  try{
   const {data,error}=await db.from("games").update({status}).eq("id",game.id).eq("status",game.status).select("id");
   if(error||!data?.length){alert("No se pudo cambiar el estado: "+(error?.message||"La partida cambió o no tienes permisos."));return;}
-  if(currentGame?.id===game.id){currentGame.status=status;renderAdminGameState();}
+  if(currentGame?.id===game.id){currentGame.status=status;renderAdminGameState();void mobileTactical?.poll();}
   await loadGames();
   alert(reopening?"Partida reabierta. Sus resultados se conservaron.":status==="active"?"Operación iniciada.":"Partida finalizada. Sus resultados se conservaron.");
  }finally{gameAdminBusy=false;renderAdminGameState();}
@@ -245,7 +292,7 @@ async function deleteSelectedGame(){
   if(error||!data?.length){alert("No se pudo eliminar la partida: "+(error?.message||"Ya no existe o no tienes permisos."));return;}
   if(currentGame?.id===game.id){
    if(editingObjectiveId)cancelObjectiveLocation();
-   currentGame=null;currentTeams=[];currentPlayers=[];currentObjectives=[];
+   mobileTactical?.detach();currentGame=null;currentTeams=[];currentPlayers=[];currentObjectives=[];
    $("gameAdmin").classList.add("hidden");
   }
   await loadGames();
@@ -605,7 +652,7 @@ function updateAdminEditMarker(){if(!mapAdmin)return;if(adminEditMarker){mapAdmi
 async function saveObjectiveLocation(){if(!editingObjectiveId||!currentGame)return;const lat=Number($("editObjLat").value),lng=Number($("editObjLng").value);if(!$("editObjLat").value.trim()||!$("editObjLng").value.trim()||!Number.isFinite(lat)||!Number.isFinite(lng)||lat< -90||lat>90||lng< -180||lng>180){$("editObjectiveStatus").textContent="Ingresa coordenadas válidas.";return;}if(!navigator.onLine){$("editObjectiveStatus").textContent="Conéctate a internet para guardar el cambio.";return;}const id=editingObjectiveId;$("editObjectiveStatus").textContent="Guardando nueva ubicación...";const {data,error}=await db.from("objectives").update({latitude:lat,longitude:lng}).eq("id",id).eq("game_id",currentGame.id).select("id").single();if(error||!data){$("editObjectiveStatus").textContent="No se pudo actualizar: "+(error?.message||"Verifica permisos de administrador.");return;}cancelObjectiveLocation();await selectGame(currentGame.id);alert("Ubicación actualizada. El QR y las asignaciones existentes no cambiaron. Los jugadores deben actualizar el mapa para ver el nuevo punto.");}
 function renderAdminMap(){
  if(!window.L)return;const pts=currentObjectives.filter(o=>o.status!=="retired"&&o.latitude!=null&&o.longitude!=null);
- if(!mapAdmin){mapAdmin=L.map("adminMap").setView(pts.length?[pts[0].latitude,pts[0].longitude]:[4.65,-74.1],pts.length?14:5);mapAdmin.on("click",e=>{if(!editingObjectiveId)return;$("editObjLat").value=e.latlng.lat.toFixed(7);$("editObjLng").value=e.latlng.lng.toFixed(7);$("editObjectiveStatus").textContent="Punto seleccionado. Pulsa GUARDAR NUEVA UBICACIÓN para confirmar.";updateAdminEditMarker();});setAdminSatellite(adminSatellite);}
+ if(!mapAdmin){mapAdmin=L.map("adminMap").setView(pts.length?[pts[0].latitude,pts[0].longitude]:[4.65,-74.1],pts.length?14:5);mapAdmin.on("click",e=>{if(mobileTactical?.pick(e.latlng))return;if(!editingObjectiveId)return;$("editObjLat").value=e.latlng.lat.toFixed(7);$("editObjLng").value=e.latlng.lng.toFixed(7);$("editObjectiveStatus").textContent="Punto seleccionado. Pulsa GUARDAR NUEVA UBICACIÓN para confirmar.";updateAdminEditMarker();});setAdminSatellite(adminSatellite);}
  else{mapAdmin.eachLayer(l=>{if(l instanceof L.Marker||l instanceof L.Circle||l instanceof L.CircleMarker)mapAdmin.removeLayer(l);});adminEditMarker=null;}
  pts.forEach(o=>{
   const marker=L.marker([o.latitude,o.longitude],{draggable:o.status!=="captured",autoPan:true}).addTo(mapAdmin);
@@ -681,6 +728,7 @@ function tacticalWatchCaptures(gameId){
  try{tacticalCaptureChannel=db.channel("tactical-captures-"+gameId).on("postgres_changes",{event:"UPDATE",schema:"public",table:"objectives",filter:"game_id=eq."+gameId},()=>tacticalCheckCapturedObjectives()).subscribe();}catch(e){console.warn("Realtime no disponible; sigue consulta periódica.",e);}
 }
 function clearPlayerGame(message){
+ mobileTactical?.detach();
  const id=currentGame?.id;
  stopLiveGps();stopTacticalCamera();tacticalTarget=null;tacticalModelArrived=false;
  if(tacticalCapturePoll)clearInterval(tacticalCapturePoll);
@@ -729,6 +777,8 @@ function renderPlayerSnapshot(snap,offline){
  $("playerGameInfo").innerHTML="<b>"+escapeHtml(g.name)+"</b><br>Indicativo: "+escapeHtml(gp.callsign)+" · Equipo: <span class='tag "+teamTag+"'>"+escapeHtml(teamLabel(t))+"</span><br>Estado: "+g.status;
  $("playerStatus").textContent=offline?"MODO SIN CONEXIÓN. Los escaneos quedarán pendientes y se sincronizarán al recuperar internet.":(g.status==="active"?"Operación en curso. Mantén tu ubicación compartida para apoyar al equipo.":"La operación no está activa.");
  $("myObjectives").innerHTML=assignments.length?assignments.map(x=>{const o=x.objectives||{};const virtual=o.objective_type==="virtual";return '<div class="card"><div class="topline"><b>'+escapeHtml(o.name||"Misión")+'</b><span class="tag '+(o.status==="captured"?"red":"green")+'">'+(o.status==="captured"?"CAPTURADO":x.status.toUpperCase())+'</span></div>'+(x.is_secret?'<span class="tag yellow">MISIÓN SECRETA</span>':"")+'<p class="small">'+(virtual?"OBJETIVO VIRTUAL GPS · ":"OBJETIVO FÍSICO QR · ")+(o.latitude!=null?"GPS: "+Number(o.latitude).toFixed(5)+", "+Number(o.longitude).toFixed(5):"Sin coordenadas GPS")+'</p>'+(o.visual_description?'<p>'+escapeHtml(o.visual_description)+'</p>':"")+(virtual&&g.status==="active"&&o.status==="available"?'<button class="secondary" onclick="showAR(\''+o.id+'\')">📍 BUSCAR OBJETIVO ASIGNADO</button>':"")+'</div>';}).join(""):"No tienes misiones asignadas todavía.";
+ $("myObjectives").dataset.empty=String(!assignments.length);
+ mobileTactical?.attach("player",g.id);
  if(tacticalTarget&&(!tacticalCameraCapturing||g.status!=="active")&&(g.status!=="active"||!assignments.some(x=>x.objectives?.id===tacticalTarget.objectiveId&&x.objectives.status==="available")))closePlayerCamera();
 }
 let tacticalCameraStream=null;
@@ -1010,6 +1060,7 @@ async function loadPlayerMap(fitView=true){
  if(!myGps){const own=locs.find(x=>x.user_id===currentUser.id);if(own)myGps=[Number(own.latitude),Number(own.longitude)];}
  if(myGps){gpsLiveMarker=L.circleMarker(myGps,ownGpsMarkerStyle()).addTo(playerMapOverlay).bindPopup("Mi ubicación GPS");const near=objectives.filter(x=>x.latitude!=null&&x.longitude!=null).map(x=>({p:[Number(x.latitude),Number(x.longitude)],d:metersBetween(myGps,[Number(x.latitude),Number(x.longitude)])})).sort((a,b)=>a.d-b.d)[0];if(near)gpsLiveLine=L.polyline([myGps,near.p],{color:"#f1ca52",weight:3,dashArray:"7,7"}).addTo(mapPlayer);}
  updateGpsNavigation(objectives);
+ mobileTactical?.draw();
  setTimeout(()=>{mapPlayer.invalidateSize();if(fitView&&pts.length)mapPlayer.fitBounds(L.latLngBounds(pts),{padding:[28,28],maxZoom:17});},300);
 }
 async function startScanner(){
@@ -1086,8 +1137,13 @@ async function syncPendingCaptures(){
  if(remaining.length===0){msg("captureMsg","Todas las capturas pendientes fueron sincronizadas.");await loadPlayerGame();}
  else msg("captureMsg",remaining.length+" captura(s) siguen pendientes de validación. Revisa conexión y vuelve a intentar.");
 }
-(async()=>{const {data:{session}}=await db.auth.getSession();if(session?.user){try{await enterApp(session.user);}catch(e){await logout();msg("loginMsg",e.message);}}})();
-window.addEventListener("online",async()=>{await syncPendingCaptures();const loc=JSON.parse(localStorage.getItem("anubis_location_queue")||"null");if(loc&&currentUser){const {error}=await db.from("player_locations").upsert(loc,{onConflict:"game_id,user_id"});if(!error){localStorage.removeItem("anubis_location_queue");msg("playerStatus","Ubicación compartida al recuperar internet.");}}});
+const mobileOptions={db,url:SUPABASE_URL,key:SUPABASE_KEY,map:view=>view==="admin"?mapAdmin:mapPlayer,
+ game:()=>currentGame,position:()=>myGps,distance:metersBetween};
+const isMobileDevice=new URLSearchParams(location.search).get("modo")==="objetivo";
+const mobileTactical=!isMobileDevice&&window.AnubisMobileObjective?window.AnubisMobileObjective.tactical(mobileOptions):null;
+if(isMobileDevice){if(window.AnubisMobileObjective)window.AnubisMobileObjective.device(mobileOptions);else{ $("login").classList.add("hidden");$("mobileDevice").classList.remove("hidden");$("mobileDeviceStatus").textContent="No se pudo cargar el módulo. Conéctate y vuelve a abrir Tactical."; }}
+if(!isMobileDevice)(async()=>{const {data:{session}}=await db.auth.getSession();if(session?.user){try{await enterApp(session.user);}catch(e){await logout();msg("loginMsg",e.message);}}})();
+if(!isMobileDevice)window.addEventListener("online",async()=>{await syncPendingCaptures();const loc=JSON.parse(localStorage.getItem("anubis_location_queue")||"null");if(loc&&currentUser){const {error}=await db.from("player_locations").upsert(loc,{onConflict:"game_id,user_id"});if(!error){localStorage.removeItem("anubis_location_queue");msg("playerStatus","Ubicación compartida al recuperar internet.");}}});
 if("serviceWorker" in navigator){window.addEventListener("load",()=>{navigator.serviceWorker.register("./sw.js").then(()=>{if(!navigator.serviceWorker.controller){navigator.serviceWorker.addEventListener("controllerchange",()=>{if(!sessionStorage.getItem("anubis-sw-ready")){sessionStorage.setItem("anubis-sw-ready","1");location.reload();}});}}).catch(()=>{});});}
 </script>
 </body></html>
