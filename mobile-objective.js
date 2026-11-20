@@ -210,16 +210,17 @@
    } catch {} finally {wakePending=false;}
   }
   function beep() {
-   if(!enabled || stateOf(objective)!=="live" || audio?.state!=="running" || performance.now()-lastBeep<3500)return;
+   if(!enabled || stateOf(objective)!=="live" || audio?.state!=="running" || performance.now()-lastBeep<4600)return;
    const left=(objective.deadline-performance.now())/1000;
-   if(left<.5)return;
+   if(left<.66)return;
    lastBeep=performance.now();
-   for(const offset of [0,.24]){
-    const o=audio.createOscillator(), g=audio.createGain(), t=audio.currentTime+offset;
-    o.type="square";o.frequency.setValueAtTime(920,t);o.frequency.setValueAtTime(1150,t+.11);
-    g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(.23,t+.015);
-    g.gain.setValueAtTime(.23,t+.15);g.gain.linearRampToValueAtTime(.0001,t+.2);
-    o.connect(g);g.connect(audio.destination);o.start(t);o.stop(t+.21);
+   // A descending triple chime, distinct from Respawn's two rising square-wave bursts.
+   for(const [offset,hz,duration] of [[0,1560,.11],[.18,1170,.11],[.36,880,.24]]){
+    const o=audio.createOscillator(),g=audio.createGain(),t=audio.currentTime+offset;
+    o.type="triangle";o.frequency.setValueAtTime(hz,t);
+    g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(.36,t+.012);
+    g.gain.exponentialRampToValueAtTime(.0001,t+duration);
+    o.connect(g);g.connect(audio.destination);o.start(t);o.stop(t+duration+.01);
    }
   }
   function unavailable(e){

@@ -100,9 +100,11 @@ if(new URLSearchParams(location.search).get("modo")==="objetivo"&&location.hash.
 <div class="panel">
 <h2>JUGADORES Y EQUIPOS</h2>
 <label>Usuario de acceso</label><input id="playerUsername" maxlength="32" placeholder="Ej. puma01">
-<label>PIN de cuatro dígitos</label><input id="playerPin" inputmode="numeric" maxlength="4" placeholder="••••">
+<label>PIN de cuatro dígitos (solo para cuentas nuevas)</label><input id="playerPin" inputmode="numeric" maxlength="4" placeholder="••••">
 <label>Equipo</label><select id="playerTeam"></select>
-<button onclick="createPlayer()">REGISTRAR JUGADOR</button><p id="playerMsg" class="status hidden"></p>
+<div class="actions"><button id="registerNewPlayerBtn" type="button" onclick="createPlayer()">REGISTRAR NUEVO</button><button id="linkExistingPlayerBtn" type="button" class="secondary" onclick="createPlayer(true)">AGREGAR OPERADOR EXISTENTE</button></div>
+<p class="small">Si ya tiene cuenta, escribe su usuario y elige el equipo. No necesitas volver a escribir su PIN.</p>
+<p id="playerMsg" class="status hidden" role="status"></p>
 <hr><div id="playersList" class="muted">Selecciona una partida.</div>
 <form id="editPlayerForm" class="card hidden">
  <h3>EDITAR JUGADOR</h3>
@@ -164,7 +166,7 @@ if(new URLSearchParams(location.search).get("modo")==="objetivo"&&location.hash.
 </main>
 <footer>ANUBIS MAG TACTICAL · Sistema de operaciones MILSIM</footer>
 
-<script src="./mobile-objective.js?v=2"></script>
+<script src="./mobile-objective.js?v=3"></script>
 <script>
 function mountPlayerRespawn(){
   const frame=document.getElementById("playerRespawnFrame");
@@ -433,28 +435,44 @@ async function changePlayerMembership(id,action){
 }
 $("editPlayerForm").addEventListener("submit",savePlayerEdit);
 $("editPlayerCancel").onclick=closePlayerEditor;
-async function createPlayer(){
+let playerRegistrationBusy=false;
+async function createPlayer(reuse=false){
  if(!currentGame){msg("playerMsg","Selecciona una partida.");return;}
- const body={callsign:$("playerUsername").value.trim().toLowerCase(),username:$("playerUsername").value.trim().toLowerCase(),pin:$("playerPin").value,team_id:$("playerTeam").value,game_id:currentGame.id};
- if(body.callsign.length<2||body.callsign.length>40||!/^[a-z0-9_-]{3,32}$/.test(body.username)||!/^[0-9]{4}$/.test(body.pin)){msg("playerMsg","Verifica usuario (3 a 32 letras minúsculas, números, guion o guion bajo) y PIN de cuatro dígitos.");return;}
- if(!currentTeams.some(t=>t.id===body.team_id&&t.game_id===body.game_id)){msg("playerMsg","El equipo no corresponde a esta partida. Vuelve a abrir la operación.");return;}
- msg("playerMsg","Verificando equipo y partida...");
+ if(playerRegistrationBusy)return;
+ const gameId=currentGame.id,username=$("playerUsername").value.trim().toLowerCase(),pin=$("playerPin").value;
+ const body={username,team_id:$("playerTeam").value,game_id:gameId};
+ if(!/^[a-z0-9_-]{3,32}$/.test(username)){msg("playerMsg","Escribe un usuario de 3 a 32 letras, números, guion o guion bajo.");return;}
+ if(!reuse&&!/^[0-9]{4}$/.test(pin)){msg("playerMsg","Para una cuenta nueva, escribe un PIN de cuatro dígitos.");return;}
+ if(!currentTeams.some(t=>t.id===body.team_id&&t.game_id===gameId)){msg("playerMsg","El equipo no corresponde a esta partida. Vuelve a abrir la operación.");return;}
+ playerRegistrationBusy=true;
+ for(const id of ["registerNewPlayerBtn","linkExistingPlayerBtn"])$(id).disabled=true;
+ msg("playerMsg",reuse?"Agregando operador a la partida...":"Registrando jugador...");
  try{
-  const {data:verifiedTeam,error:teamError}=await db.from("teams").select("id,game_id,name").eq("id",body.team_id).eq("game_id",body.game_id).maybeSingle();
-  if(teamError)throw new Error("No se pudo verificar el equipo: "+teamError.message);
-  if(!verifiedTeam)throw new Error("El equipo seleccionado no está disponible para esta partida. Actualiza y vuelve a abrir la operación.");
-  msg("playerMsg","Registrando jugador...");
-  const {data,error}=await db.functions.invoke("admin-create-player",{body});
+  if(!reuse){
+   const {data:verifiedTeam,error:teamError}=await db.from("teams").select("id,game_id,name").eq("id",body.team_id).eq("game_id",gameId).maybeSingle();
+   if(teamError)throw new Error("No se pudo verificar el equipo: "+teamError.message);
+   if(!verifiedTeam)throw new Error("El equipo seleccionado no está disponible para esta partida. Actualiza y vuelve a abrir la operación.");
+  }
+  const {data,error}=await db.functions.invoke(reuse?"admin-link-player":"admin-create-player",{body:reuse?body:{...body,pin,callsign:username}});
   if(error){
    let detail="";
    if(error.context&&typeof error.context.json==="function"){try{const payload=await error.context.json();detail=payload?.error||payload?.message||"";}catch(_){}}
-   throw new Error(detail||error.message||"Error al registrar el jugador.");
+   if(!reuse&&error.context?.status===409)detail="Ese usuario ya tiene cuenta. Pulsa Agregar operador existente para incluirlo en esta partida.";
+   throw new Error(detail||error.message||"No se pudo registrar el jugador.");
   }
   if(!data?.success)throw new Error(data?.error||"No se pudo registrar el jugador.");
-  msg("playerMsg","Jugador registrado: "+data.username+". Entrégale su usuario y PIN.");
+  if(currentGame?.id!==gameId)return;
   $("playerUsername").value="";$("playerPin").value="";
-  await selectGame(currentGame.id);
- }catch(e){msg("playerMsg",e.message||"Error inesperado de registro.");}
+  await selectGame(gameId);
+  if(currentGame?.id===gameId){
+   if(reuse&&data.player_id)$("assignPlayer").value=data.player_id;
+   msg("playerMsg",reuse?"Operador agregado: "+data.username+". Ya aparece en Asignar objetivos y conserva su PIN.":"Jugador registrado: "+data.username+". Entrégale su usuario y PIN.");
+  }
+ }catch(e){if(currentGame?.id===gameId)msg("playerMsg",e.message||"Error inesperado de registro.");}
+ finally{
+  playerRegistrationBusy=false;
+  for(const id of ["registerNewPlayerBtn","linkExistingPlayerBtn"])$(id).disabled=false;
+ }
 }
 function updateAssignmentMode(){
  const teams=$("assignMode").value==="teams";
