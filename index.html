@@ -989,6 +989,14 @@ function compassMissionTarget(position){
  if(chosen)return toPoint(chosen);
  return compassAssignedObjectives.map(toPoint).sort((a,b)=>metersBetween(position,a.p)-metersBetween(position,b.p))[0] || mobileTactical?.compassTarget?.();
 }
+function tacticalCompassArrowAngle(bearing,heading){
+ // The sensor uses the device's natural top edge. Rotate that reference to the visible top edge.
+ const angle=window.screen?.orientation?.angle;
+ const legacyAngle=window.orientation;
+ const screenAngle=Number.isFinite(angle)?angle:Number.isFinite(legacyAngle)?legacyAngle:0;
+ const relative=bearing-(heading===null?0:heading+screenAngle);
+ return ((relative%360)+360)%360;
+}
 function refreshTacticalCompass(){
  const arrow=$("compassArrow"),info=$("compassInfo");if(!arrow||!info)return;
  const position=compassPlayerPosition();
@@ -997,9 +1005,14 @@ function refreshTacticalCompass(){
  if(!position){info.textContent="Inicia el GPS en vivo o abre un objetivo para ver el rumbo.";return;}
  if(!target){info.textContent="No tienes un objetivo asignado disponible con coordenadas.";return;}
  const bearing=compassBearing(position,target.p);
- arrow.style.transform="rotate("+((bearing-(deviceHeading??0)+360)%360)+"deg)";
+ arrow.style.transform="rotate("+tacticalCompassArrowAngle(bearing,deviceHeading)+"deg)";
  info.textContent=target.name+" · Rumbo "+Math.round(bearing)+"°"+(deviceHeading===null?" respecto al norte.":"");
 }
+function redrawCompassAfterRotation(){
+ if(compassHandler)window.requestAnimationFrame(()=>{if(compassHandler)refreshTacticalCompass();});
+}
+window.screen?.orientation?.addEventListener?.("change",redrawCompassAfterRotation);
+window.addEventListener("orientationchange",redrawCompassAfterRotation);
 function listenTacticalCompass(){
  if(!window.DeviceOrientationEvent)return false;
  if(compassHandler){window.removeEventListener("deviceorientation",compassHandler,true);window.removeEventListener("deviceorientationabsolute",compassHandler,true);}
