@@ -116,7 +116,7 @@ if(new URLSearchParams(location.search).get("modo")==="objetivo"&&location.hash.
 </div>
 <div class="cols">
 <div class="panel"><h2>ASIGNAR OBJETIVOS</h2><label>Modalidad</label><select id="assignMode" onchange="updateAssignmentMode()"><option value="player">MISIÓN INDIVIDUAL</option><option value="teams">OBJETIVO EN DISPUTA (EQUIPOS)</option></select><div id="assignPlayerBox"><label>Jugador</label><select id="assignPlayer"></select></div><div id="assignTeamsBox" style="display:none"><label>Equipos participantes</label><div id="assignTeamsList"></div><p class="small">Mismo objetivo para los jugadores activos de los equipos seleccionados. Gana el primero en capturarlo.</p></div><label><input id="assignSequence" type="checkbox" style="width:auto" onchange="renderAssignableObjectives()"> Secuencia automática</label><p id="assignSequenceHint" class="small hidden">Marca los objetivos en el orden en que deben jugarse. Solo se abre el primero. Cada captura confirmada abre el siguiente paso para los operadores habilitados en ese paso.</p><label>Objetivos</label><div id="assignObjectives" class="muted"></div><div id="sequenceSteps" aria-label="Orden y participantes de la secuencia"></div><label id="assignSecretLabel"><input id="assignSecret" type="checkbox" style="width:auto"> Marcar como misión secreta</label><button onclick="assignObjectives()">ASIGNAR MISIONES</button><p id="assignMsg" class="status hidden"></p><div id="assignedMissions"></div></div>
-<div class="panel"><h2>MAPA DE OPERACIONES</h2><div class="actions"><button class="secondary" onclick="setAdminSatellite(false)">MAPA NORMAL</button><button onclick="setAdminSatellite(true)">SATÉLITE</button></div><div id="adminMap"></div><p class="small">Los marcadores representan objetivos con coordenadas GPS. Desde el computador, arrastra un marcador hasta el lugar deseado. Después confirma con GUARDAR NUEVA UBICACIÓN. También puedes hacer clic en un marcador para editarlo.</p></div>
+<div class="panel"><h2>MAPA DE OPERACIONES</h2><div class="actions"><button class="secondary" onclick="setAdminSatellite(false)">MAPA NORMAL</button><button onclick="setAdminSatellite(true)">SATÉLITE</button><button type="button" class="secondary" onclick="centerTacticalMap('admin',true)">CENTRAR EN MI UBICACIÓN</button></div><div id="adminMap"></div><p id="adminMapLocalStatus" class="small hidden" role="status"></p><p class="small">Los marcadores representan objetivos con coordenadas GPS. Desde el computador, arrastra un marcador hasta el lugar deseado. Después confirma con GUARDAR NUEVA UBICACIÓN. También puedes hacer clic en un marcador para editarlo.</p></div>
 </div>
 <section class="panel" aria-labelledby="mobileAdminTitle">
  <div class="topline"><h2 id="mobileAdminTitle">📱 OBJETIVO MÓVIL</h2><span class="tag" id="mobileAdminState">Sin configurar</span></div>
@@ -152,7 +152,7 @@ if(new URLSearchParams(location.search).get("modo")==="objetivo"&&location.hash.
 <div class="panel"><h2>MIS OBJETIVOS / MISIONES</h2><div id="myObjectives"></div><article id="mobilePlayer" class="card" hidden><div class="topline"><b>📱 Objetivo móvil</b><span id="mobilePlayerState" class="tag"></span></div><p id="mobilePlayerInfo" class="small"></p><button id="mobileShowPoint" type="button" class="secondary" hidden>VER EN EL MAPA</button></article></div>
 <div class="panel"><h2>CAPTURAR OBJETIVO QR</h2><p class="muted">Escanea el código físico del objetivo. Una vez capturado, desaparece para todos los equipos.</p><button onclick="startScanner()">ACTIVAR CÁMARA Y ESCANEAR</button><button class="secondary" onclick="stopScanner()">DETENER CÁMARA</button><div id="reader"></div><p id="captureMsg" class="status hidden"></p></div>
 </div>
-<div class="panel"><h2>MAPA TÁCTICO GPS</h2><div class="actions"><button class="secondary" onclick="setTacticalMapLayer(false)">MAPA NORMAL</button><button onclick="setTacticalMapLayer(true)">SATÉLITE</button></div><div id="playerMap"></div><div class="compass-wrap"><div class="compass-dial"><div id="compassArrow" class="compass-arrow">↑</div></div><div class="compass-info"><strong>BRÚJULA AL OBJETIVO</strong><div id="compassInfo">Activa tu GPS para localizar el objetivo.</div><button class="secondary" id="compassEnableBtn" onclick="enableTacticalCompass()">ACTIVAR BRÚJULA</button></div></div><p id="gpsNavigation" class="small" hidden></p><a id="gpsDirections" class="hidden" target="_blank" rel="noopener noreferrer" style="display:none;margin:8px 0;color:#f1ca52" href="#">ABRIR RUTA A PIE EN GOOGLE MAPS</a><div class="actions"><button id="gpsLiveBtn" onclick="toggleLiveGps()">INICIAR GPS EN VIVO</button><button class="secondary" onclick="loadPlayerMap()">ACTUALIZAR MAPA</button></div></div>
+<div class="panel"><h2>MAPA TÁCTICO GPS</h2><div class="actions"><button class="secondary" onclick="setTacticalMapLayer(false)">MAPA NORMAL</button><button onclick="setTacticalMapLayer(true)">SATÉLITE</button><button type="button" class="secondary" onclick="centerTacticalMap('player',true)">CENTRAR EN MI UBICACIÓN</button></div><div id="playerMap"></div><p id="playerMapLocalStatus" class="small hidden" role="status"></p><div class="compass-wrap"><div class="compass-dial"><div id="compassArrow" class="compass-arrow">↑</div></div><div class="compass-info"><strong>BRÚJULA AL OBJETIVO</strong><div id="compassInfo">Activa tu GPS para localizar el objetivo.</div><button class="secondary" id="compassEnableBtn" onclick="enableTacticalCompass()">ACTIVAR BRÚJULA</button></div></div><p id="gpsNavigation" class="small" hidden></p><a id="gpsDirections" class="hidden" target="_blank" rel="noopener noreferrer" style="display:none;margin:8px 0;color:#f1ca52" href="#">ABRIR RUTA A PIE EN GOOGLE MAPS</a><div class="actions"><button id="gpsLiveBtn" onclick="toggleLiveGps()">INICIAR GPS EN VIVO</button><button class="secondary" onclick="loadPlayerMap()">ACTUALIZAR MAPA</button></div></div>
 <div id="playerArPanel" class="panel hidden"><h2>REALIDAD AUMENTADA</h2><div id="arArea" class="muted"></div></div>
 <section id="playerRespawnPanel" class="panel" aria-labelledby="playerRespawnTitle">
 <h2 id="playerRespawnTitle">RESPAWN</h2>
@@ -225,7 +225,7 @@ async function enterApp(user){
  else{$("playerView").classList.remove("hidden");mountPlayerRespawn();autoStartTacticalCompass();$("adminView").classList.add("hidden");await loadPlayerGame();}
  if(navigator.onLine)syncPendingCaptures();
 }
-async function logout(){mobileTactical?.detach();unmountPlayerRespawn();if(compassHandler){window.removeEventListener("deviceorientation",compassHandler,true);window.removeEventListener("deviceorientationabsolute",compassHandler,true);compassHandler=null;}deviceHeading=null;compassEnabled=false;compassObjectiveId=null;compassAssignedObjectives=[];myGps=null;gpsLastFixAt=0;gpsLastAccuracy=null;stopLiveGps();stopTacticalCamera();tacticalTarget=null;$("arArea").textContent="";$("playerArPanel").classList.add("hidden");await stopScanner();await db.auth.signOut();currentUser=null;currentProfile=null;currentGame=null;$("app").classList.add("hidden");$("login").classList.remove("hidden");$("pin").value="";}
+async function logout(){resetLocalMapLocation("admin");resetLocalMapLocation("player");mobileTactical?.detach();unmountPlayerRespawn();if(compassHandler){window.removeEventListener("deviceorientation",compassHandler,true);window.removeEventListener("deviceorientationabsolute",compassHandler,true);compassHandler=null;}deviceHeading=null;compassEnabled=false;compassObjectiveId=null;compassAssignedObjectives=[];myGps=null;gpsLastFixAt=0;gpsLastAccuracy=null;stopLiveGps();stopTacticalCamera();tacticalTarget=null;$("arArea").textContent="";$("playerArPanel").classList.add("hidden");await stopScanner();await db.auth.signOut();currentUser=null;currentProfile=null;currentGame=null;$("app").classList.add("hidden");$("login").classList.remove("hidden");$("pin").value="";}
 async function createGame(){
  const name=$("gameName").value.trim(),count=Number($("teamCount").value);if(name.length<3){msg("createMsg","El nombre debe tener al menos 3 caracteres.");return;}
  try{const {data,error}=await db.rpc("create_game_with_teams",{p_name:name,p_team_count:count});if(error)throw error;$("gameName").value="";msg("createMsg","Partida creada con "+count+" equipos.");await loadGames();await selectGame(data);}
@@ -650,6 +650,58 @@ function editObjectiveLocation(id){const obj=currentObjectives.find(o=>o.id===id
 function cancelObjectiveLocation(){editingObjectiveId=null;$("editObjectivePanel").classList.add("hidden");if(adminEditMarker&&mapAdmin){mapAdmin.removeLayer(adminEditMarker);adminEditMarker=null;}}
 function updateAdminEditMarker(){if(!mapAdmin)return;if(adminEditMarker){mapAdmin.removeLayer(adminEditMarker);adminEditMarker=null;}if(!editingObjectiveId)return;const lat=Number($("editObjLat").value),lng=Number($("editObjLng").value);if($("editObjLat").value!==""&&$("editObjLng").value!==""&&Number.isFinite(lat)&&Number.isFinite(lng))adminEditMarker=L.circleMarker([lat,lng],{radius:12,color:"#f1ca52",weight:3,fillColor:"#f1ca52",fillOpacity:.5}).addTo(mapAdmin).bindPopup("Nueva ubicación propuesta");}
 async function saveObjectiveLocation(){if(!editingObjectiveId||!currentGame)return;const lat=Number($("editObjLat").value),lng=Number($("editObjLng").value);if(!$("editObjLat").value.trim()||!$("editObjLng").value.trim()||!Number.isFinite(lat)||!Number.isFinite(lng)||lat< -90||lat>90||lng< -180||lng>180){$("editObjectiveStatus").textContent="Ingresa coordenadas válidas.";return;}if(!navigator.onLine){$("editObjectiveStatus").textContent="Conéctate a internet para guardar el cambio.";return;}const id=editingObjectiveId;$("editObjectiveStatus").textContent="Guardando nueva ubicación...";const {data,error}=await db.from("objectives").update({latitude:lat,longitude:lng}).eq("id",id).eq("game_id",currentGame.id).select("id").single();if(error||!data){$("editObjectiveStatus").textContent="No se pudo actualizar: "+(error?.message||"Verifica permisos de administrador.");return;}cancelObjectiveLocation();await selectGame(currentGame.id);alert("Ubicación actualizada. El QR y las asignaciones existentes no cambiaron. Los jugadores deben actualizar el mapa para ver el nuevo punto.");}
+// A one-time GPS fix to frame the map. It never uses the team-sharing path.
+const localMapStates={admin:{version:0},player:{version:0}};
+function attachLocalMapLocation(role,map){
+ const s=localMapStates[role];
+ if(s.map!==map){
+  s.map=map;
+  const keepView=()=>{s.userMoved=true;};
+  map.on("dragstart",keepView);
+  for(const event of ["pointerdown","wheel","keydown"])map.getContainer().addEventListener(event,keepView,{passive:true,capture:true});
+ }
+ drawLocalMapLocation(role);
+ centerTacticalMap(role);
+}
+function resetLocalMapLocation(role){
+ const s=localMapStates[role];
+ ++s.version;s.attempted=false;s.userMoved=false;s.centered=false;s.fix=null;s.marker?.remove();s.marker=null;
+ const status=$(role+"MapLocalStatus");status.textContent="";status.classList.add("hidden");
+}
+function drawLocalMapLocation(role){
+ const s=localMapStates[role];
+ if(!s.map || !s.fix || role==="player" && myGps){
+  s.marker?.remove();s.marker=null;return;
+ }
+ if(s.marker && s.map.hasLayer(s.marker)){s.marker.setLatLng(s.fix);return;}
+ s.marker=L.circleMarker(s.fix,{radius:7,color:"#ffffff",weight:2,fillColor:"#299aff",fillOpacity:1})
+  .addTo(s.map).bindTooltip("Mi ubicación · solo en este dispositivo");
+}
+function centerTacticalMap(role,manual=false){
+ const s=localMapStates[role],map=s.map;
+ if(!map || !manual && s.attempted)return;
+ s.attempted=true;
+ const version=++s.version;
+ const tell=(text)=>msg(role+"MapLocalStatus",text);
+ if(!navigator.geolocation){tell("Este navegador no ofrece ubicación.");return;}
+ tell("Buscando tu ubicación…");
+ navigator.geolocation.getCurrentPosition(({coords})=>{
+  if(version!==s.version)return;
+  const status=$(role+"MapLocalStatus");
+  status.classList.add("hidden");status.textContent="";
+  if(!manual && s.userMoved)return;
+  const accuracy=Number(coords.accuracy);
+  s.fix=[coords.latitude,coords.longitude];
+  s.centered=true;
+  map.invalidateSize({pan:false});
+  map.setView(s.fix,accuracy>1000?14:accuracy>150?16:17,{animate:false});
+  drawLocalMapLocation(role);
+  if(accuracy>150)tell("Ubicación aproximada. Activa la ubicación precisa del dispositivo para acercarte más.");
+ },error=>{
+  if(version!==s.version)return;
+  tell(error.code===1?"Permite el acceso a la ubicación y pulsa Centrar en mi ubicación.":"No se pudo obtener tu ubicación. Activa el GPS y vuelve a intentarlo.");
+ },{enableHighAccuracy:true,maximumAge:15000,timeout:15000});
+}
 function renderAdminMap(){
  if(!window.L)return;const pts=currentObjectives.filter(o=>o.status!=="retired"&&o.latitude!=null&&o.longitude!=null);
  if(!mapAdmin){mapAdmin=L.map("adminMap").setView(pts.length?[pts[0].latitude,pts[0].longitude]:[4.65,-74.1],pts.length?14:5);mapAdmin.on("click",e=>{if(mobileTactical?.pick(e.latlng))return;if(!editingObjectiveId)return;$("editObjLat").value=e.latlng.lat.toFixed(7);$("editObjLng").value=e.latlng.lng.toFixed(7);$("editObjectiveStatus").textContent="Punto seleccionado. Pulsa GUARDAR NUEVA UBICACIÓN para confirmar.";updateAdminEditMarker();});setAdminSatellite(adminSatellite);}
@@ -670,7 +722,7 @@ function renderAdminMap(){
    mapAdmin.panTo(pos);
   });
   L.circle([o.latitude,o.longitude],{radius:Number(o.radius_m)||35,color:o.objective_type==="virtual"?"#d5bd68":"#71864a",interactive:false}).addTo(mapAdmin);
- });updateAdminEditMarker();setTimeout(()=>mapAdmin.invalidateSize(),200);
+ });updateAdminEditMarker();attachLocalMapLocation("admin",mapAdmin);setTimeout(()=>mapAdmin.invalidateSize(),200);
 }
 let tacticalCapturePoll=null,tacticalCaptureChannel=null,tacticalCaptureBusy=false,tacticalCaptureGameId=null;
 const tacticalCaptureSeen=new Map();
@@ -728,6 +780,7 @@ function tacticalWatchCaptures(gameId){
  try{tacticalCaptureChannel=db.channel("tactical-captures-"+gameId).on("postgres_changes",{event:"UPDATE",schema:"public",table:"objectives",filter:"game_id=eq."+gameId},()=>tacticalCheckCapturedObjectives()).subscribe();}catch(e){console.warn("Realtime no disponible; sigue consulta periódica.",e);}
 }
 function clearPlayerGame(message){
+ resetLocalMapLocation("player");
  mobileTactical?.detach();
  const id=currentGame?.id;
  stopLiveGps();stopTacticalCamera();tacticalTarget=null;tacticalModelArrived=false;
@@ -1006,6 +1059,7 @@ async function applyLiveGpsFix(p){
  refreshTacticalCompass();
  updateGpsNavigation(gpsObjectives);
  if(mapPlayer){
+  drawLocalMapLocation("player");
   if(!gpsLiveMarker)gpsLiveMarker=L.circleMarker(myGps,ownGpsMarkerStyle()).addTo(playerMapOverlay||mapPlayer).bindPopup("Mi ubicación GPS en vivo");else gpsLiveMarker.setLatLng(myGps).setStyle(ownGpsMarkerStyle());
   const near=gpsObjectives.filter(x=>x.latitude!=null&&x.longitude!=null).map(x=>({p:[Number(x.latitude),Number(x.longitude)],d:metersBetween(myGps,[Number(x.latitude),Number(x.longitude)])})).sort((a,b)=>a.d-b.d)[0];
   if(gpsLiveLine){if(playerMapOverlay)playerMapOverlay.removeLayer(gpsLiveLine);else mapPlayer.removeLayer(gpsLiveLine);gpsLiveLine=null;}if(near)gpsLiveLine=L.polyline([myGps,near.p],{color:"#f1ca52",weight:3,dashArray:"7,7"}).addTo(playerMapOverlay||mapPlayer);
@@ -1060,8 +1114,14 @@ async function loadPlayerMap(fitView=true){
  if(!myGps){const own=locs.find(x=>x.user_id===currentUser.id);if(own)myGps=[Number(own.latitude),Number(own.longitude)];}
  if(myGps){gpsLiveMarker=L.circleMarker(myGps,ownGpsMarkerStyle()).addTo(playerMapOverlay).bindPopup("Mi ubicación GPS");const near=objectives.filter(x=>x.latitude!=null&&x.longitude!=null).map(x=>({p:[Number(x.latitude),Number(x.longitude)],d:metersBetween(myGps,[Number(x.latitude),Number(x.longitude)])})).sort((a,b)=>a.d-b.d)[0];if(near)gpsLiveLine=L.polyline([myGps,near.p],{color:"#f1ca52",weight:3,dashArray:"7,7"}).addTo(mapPlayer);}
  updateGpsNavigation(objectives);
+ attachLocalMapLocation("player",mapPlayer);
  mobileTactical?.draw();
- setTimeout(()=>{mapPlayer.invalidateSize();if(fitView&&pts.length)mapPlayer.fitBounds(L.latLngBounds(pts),{padding:[28,28],maxZoom:17});},300);
+ setTimeout(()=>{
+  if(renderVersion!==playerMapRenderVersion || !currentGame || !currentUser)return;
+  mapPlayer.invalidateSize();
+  const frame=localMapStates.player;
+  if(fitView&&pts.length&&!frame.centered&&!frame.userMoved)mapPlayer.fitBounds(L.latLngBounds(pts),{padding:[28,28],maxZoom:17});
+ },300);
 }
 async function startScanner(){
  if(!currentGame||currentGame.status!=="active"){msg("captureMsg","La partida debe estar activa para capturar.");return;}

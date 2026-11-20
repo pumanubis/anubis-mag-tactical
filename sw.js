@@ -1,4 +1,4 @@
-const CACHE_NAME="anubis-tactical-v4";
+const CACHE_NAME="anubis-tactical-v5";
 const APP_FILES=["./","./index.html","./mobile-objective.js?v=1","./manifest.webmanifest","./anubis-mag-logo-oliva.png.png"];
 const STATIC_HOSTS=["cdn.jsdelivr.net","unpkg.com","cdnjs.cloudflare.com","tile.openstreetmap.org"];
 self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(APP_FILES)).then(()=>self.skipWaiting()));});
