@@ -116,8 +116,7 @@ if(new URLSearchParams(location.search).get("modo")==="objetivo"&&location.hash.
 <hr><div id="playersList" class="muted">Selecciona una partida.</div>
 <form id="editPlayerForm" class="card hidden">
  <h3>EDITAR JUGADOR</h3>
- <label for="editPlayerUsername">Usuario de acceso (compartido entre partidas)</label><input id="editPlayerUsername" maxlength="32" autocomplete="off">
- <label for="editPlayerCallsign">Indicativo en esta partida</label><input id="editPlayerCallsign" maxlength="40" autocomplete="off" required>
+ <label for="editPlayerUsername">Usuario de acceso</label><input id="editPlayerUsername" maxlength="32" autocomplete="off">
  <p class="small" id="editPlayerHint"></p>
  <label for="editPlayerTeam">Equipo</label><select id="editPlayerTeam" required></select>
  <div class="actions"><button id="editPlayerSave" type="submit">GUARDAR CAMBIOS</button><button id="editPlayerCancel" type="button" class="secondary">CANCELAR</button></div>
@@ -386,7 +385,7 @@ async function useCurrentPosition(latId,lngId){if(!navigator.geolocation){alert(
 let editPlayerTarget=null,playerManageBusy=false,editPlayerRequest=0;
 function closePlayerEditor(){
  editPlayerRequest++;editPlayerTarget=null;
- $("editPlayerForm").classList.add("hidden");$("editPlayerUsername").value="";$("editPlayerCallsign").value="";
+ $("editPlayerForm").classList.add("hidden");$("editPlayerUsername").value="";
 }
 function renderManagePlayers(){
  const list=$("playersList");list.replaceChildren();
@@ -415,9 +414,9 @@ function renderManagePlayers(){
   const info=document.createElement("div");info.className="small";
   info.textContent=teamLabel(currentTeams.find(t=>t.id===p.team_id))+" · "+(p.status==="active"?"Activo":"Retirado");
   card.append(title,info);
-  {
+  if(currentGame?.status!=="finished"){
    const actions=document.createElement("div");actions.className="actions";
-   for(const [label,click] of [["EDITAR JUGADOR",()=>openPlayerEditor(p.id)],...(currentGame?.status==="finished"?[]:[p.status==="active"?["QUITAR DE LA PARTIDA",()=>changePlayerMembership(p.id,"remove")]:["REINCORPORAR",()=>changePlayerMembership(p.id,"restore")]])]){
+   for(const [label,click] of [["EDITAR JUGADOR",()=>openPlayerEditor(p.id)],p.status==="active"?["QUITAR DE LA PARTIDA",()=>changePlayerMembership(p.id,"remove")]:["REINCORPORAR",()=>changePlayerMembership(p.id,"restore")]]){
     const btn=document.createElement("button");btn.type="button";btn.className="secondary";btn.textContent=label;btn.onclick=click;actions.append(btn);
    }
    card.append(actions);
@@ -436,7 +435,7 @@ async function managePlayerRequest(body){
  return data;
 }
 async function openPlayerEditor(id){
- if(playerManageBusy||!currentGame)return;
+ if(playerManageBusy||!currentGame||currentGame.status==="finished")return;
  const p=currentPlayers.find(player=>player.id===id);if(!p)return;
  closePlayerEditor();
  const request=editPlayerRequest,game_id=currentGame.id;
@@ -446,9 +445,8 @@ async function openPlayerEditor(id){
   if(request!==editPlayerRequest||currentGame?.id!==game_id)return;
   editPlayerTarget={game_id,player_id:id,can_rename:result.can_rename};
   $("editPlayerUsername").value=result.username||p.callsign;
-  $("editPlayerCallsign").value=result.callsign||p.callsign;
   $("editPlayerUsername").disabled=!result.can_rename;
-  $("editPlayerHint").textContent=result.can_rename?"Puedes editar el indicativo, el equipo y el usuario de acceso. El PIN no cambia.":"El usuario de acceso es el mismo en varias partidas y no se puede cambiar aquí. Puedes editar el indicativo y el equipo de esta partida.";
+  $("editPlayerHint").textContent=result.can_rename?"El PIN del jugador no cambia.":"El usuario no se puede cambiar desde esta partida. Puedes corregir el equipo.";
   $("editPlayerTeam").innerHTML=$("playerTeam").innerHTML;
   $("editPlayerTeam").value=p.team_id;
   $("editPlayerForm").classList.remove("hidden");
@@ -461,13 +459,11 @@ async function savePlayerEdit(event){
  if(playerManageBusy||!target||currentGame?.id!==target.game_id)return;
  const username=$("editPlayerUsername").value.trim().toLowerCase();
  if(target.can_rename&&!/^[a-z0-9_-]{3,32}$/.test(username)){msg("managePlayerMsg","Usa de 3 a 32 letras, números, guiones o guiones bajos.");return;}
- const callsign=$("editPlayerCallsign").value.trim();
- if(callsign.length<2||callsign.length>40){msg("managePlayerMsg","Escribe un indicativo de 2 a 40 caracteres.");return;}
  const team_id=$("editPlayerTeam").value;
  if(!currentTeams.some(t=>t.id===team_id)){msg("managePlayerMsg","Selecciona un equipo de esta partida.");return;}
  playerManageBusy=true;$("editPlayerSave").disabled=true;
  try{
-  await managePlayerRequest({action:"edit",game_id:target.game_id,player_id:target.player_id,team_id,username:target.can_rename?username:null,callsign});
+  await managePlayerRequest({action:"edit",game_id:target.game_id,player_id:target.player_id,team_id,username:target.can_rename?username:null});
   if(currentGame?.id===target.game_id){closePlayerEditor();await selectGame(target.game_id);msg("managePlayerMsg","Datos del jugador actualizados.");}
  }catch(e){if(currentGame?.id===target.game_id)msg("managePlayerMsg",e.message);}
  finally{playerManageBusy=false;$("editPlayerSave").disabled=false;}
