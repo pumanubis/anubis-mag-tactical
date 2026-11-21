@@ -181,6 +181,18 @@ if(new URLSearchParams(location.search).get("modo")==="objetivo"&&location.hash.
 function jumpPlayerSection(id){
  const target=document.getElementById(id);
  if(!target||document.getElementById("playerView").classList.contains("hidden"))return;
+ if(id==="playerRespawnPanel"){
+  // El iframe Respawn pertenece al mismo origen: ubicar el botón real sin activarlo.
+  const frame=document.getElementById("playerRespawnFrame");
+  try{
+   const start=frame?.contentDocument?.getElementById("start");
+   if(start){
+    const top=window.scrollY+frame.getBoundingClientRect().top+start.getBoundingClientRect().top-64;
+    window.scrollTo({top:Math.max(0,top),behavior:"smooth"});
+    return;
+   }
+  }catch(e){/* Si el iframe no está listo, ir al módulo como alternativa. */}
+ }
  target.scrollIntoView({behavior:"smooth",block:"start"});
  if(id==="playerMap"&&typeof mapPlayer!=="undefined"&&mapPlayer)setTimeout(()=>mapPlayer.invalidateSize(),350);
 }
