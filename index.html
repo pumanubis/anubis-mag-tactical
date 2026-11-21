@@ -417,7 +417,7 @@ function renderManagePlayers(){
   card.append(title,info);
   {
    const actions=document.createElement("div");actions.className="actions";
-   for(const [label,click] of [["EDITAR JUGADOR",()=>openPlayerEditor(p.id)],...(currentGame?.status==="finished"?[]:[p.status==="active"?["QUITAR DE LA PARTIDA",()=>changePlayerMembership(p.id,"remove")]:["REINCORPORAR",()=>changePlayerMembership(p.id,"restore")"]])]){
+   for(const [label,click] of [["EDITAR JUGADOR",()=>openPlayerEditor(p.id)],...(currentGame?.status==="finished"?[]:[p.status==="active"?["QUITAR DE LA PARTIDA",()=>changePlayerMembership(p.id,"remove")]:["REINCORPORAR",()=>changePlayerMembership(p.id,"restore")]])]){
     const btn=document.createElement("button");btn.type="button";btn.className="secondary";btn.textContent=label;btn.onclick=click;actions.append(btn);
    }
    card.append(actions);
