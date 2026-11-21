@@ -32,6 +32,14 @@ footer{text-align:center;color:#84917b;font-size:10px;padding:15px}
 #mobileDevice{max-width:500px;margin:22px auto;text-align:center}
 #mobileDeviceClock{font-size:clamp(2.8rem,12vw,5rem);font-weight:800;font-variant-numeric:tabular-nums;color:var(--gold);margin:12px}
 #mobileActivate{width:100%;min-height:58px}
+
+/* Accesos rápidos únicamente para operadores en orientación horizontal. */
+#playerLandscapeShortcuts{display:none}
+@media (orientation:landscape) and (pointer:coarse){
+ #playerView:not(.hidden) #playerLandscapeShortcuts{display:flex;position:fixed;top:calc(env(safe-area-inset-top, 0px) + 5px);right:calc(env(safe-area-inset-right, 0px) + 7px);z-index:1100;gap:5px;align-items:center;padding:3px;border:1px solid #8d783d;border-radius:9px;background:rgba(16,22,15,.94);box-shadow:0 3px 10px #0007}
+ #playerLandscapeShortcuts button{flex:none;min-width:0;margin:0;padding:7px 10px;font-size:11px;line-height:1.1;border-radius:6px;white-space:nowrap}
+ #playerMap,#playerRespawnPanel{scroll-margin-top:52px}
+}
 </style>
 <script>
 if(new URLSearchParams(location.search).get("modo")==="objetivo"&&location.hash.startsWith("#objetivo=")){
@@ -149,6 +157,8 @@ if(new URLSearchParams(location.search).get("modo")==="objetivo"&&location.hash.
 </section>
 
 <section id="playerView" class="hidden">
+<nav id="playerLandscapeShortcuts" aria-label="Accesos rápidos del operador"><button type="button" onclick="jumpPlayerSection('playerMap')">🗺️ MAPA GPS</button><button type="button" class="secondary" onclick="jumpPlayerSection('playerRespawnPanel')">⏱️ RESPAWN</button></nav>
+
 <div class="panel"><h2>MI OPERACIÓN</h2><div id="playerGameInfo" class="muted">Cargando partida...</div><div id="playerStatus" class="status"></div></div>
 <div class="cols">
 <div class="panel"><h2>MIS OBJETIVOS / MISIONES</h2><div id="myObjectives"></div><article id="mobilePlayer" class="card" hidden><div class="topline"><b>📱 Objetivo móvil</b><span id="mobilePlayerState" class="tag"></span></div><p id="mobilePlayerInfo" class="small"></p><button id="mobileShowPoint" type="button" class="secondary" hidden>VER EN EL MAPA</button></article></div>
@@ -168,6 +178,12 @@ if(new URLSearchParams(location.search).get("modo")==="objetivo"&&location.hash.
 
 <script src="./mobile-objective.js?v=3"></script>
 <script>
+function jumpPlayerSection(id){
+ const target=document.getElementById(id);
+ if(!target||document.getElementById("playerView").classList.contains("hidden"))return;
+ target.scrollIntoView({behavior:"smooth",block:"start"});
+ if(id==="playerMap"&&typeof mapPlayer!=="undefined"&&mapPlayer)setTimeout(()=>mapPlayer.invalidateSize(),350);
+}
 function mountPlayerRespawn(){
   const frame=document.getElementById("playerRespawnFrame");
   if(frame&&!frame.hasAttribute("src"))frame.setAttribute("src",frame.dataset.src);
