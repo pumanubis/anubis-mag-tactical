@@ -390,7 +390,25 @@ function closePlayerEditor(){
 function renderManagePlayers(){
  const list=$("playersList");list.replaceChildren();
  if(!currentPlayers.length){list.textContent="No hay jugadores registrados.";return;}
- for(const p of currentPlayers){
+ const orderedTeams=["Alpha","Bravo","Echo","Delta"];
+ const sorted=[...currentPlayers].sort((a,b)=>{
+  const teamA=teamLabel(currentTeams.find(t=>t.id===a.team_id));
+  const teamB=teamLabel(currentTeams.find(t=>t.id===b.team_id));
+  const rankA=orderedTeams.indexOf(teamA),rankB=orderedTeams.indexOf(teamB);
+  if(rankA!==rankB)return (rankA<0?99:rankA)-(rankB<0?99:rankB);
+  if(teamA!==teamB)return teamA.localeCompare(teamB,"es");
+  return String(a.callsign||"").localeCompare(String(b.callsign||""),"es",{sensitivity:"base"});
+ });
+ let previousTeam=null;
+ for(const p of sorted){
+  const team=teamLabel(currentTeams.find(t=>t.id===p.team_id));
+  if(team!==previousTeam){
+   const header=document.createElement("h3");
+   header.textContent="EQUIPO "+team.toUpperCase();
+   header.style.cssText="margin:16px 0 6px;padding-bottom:6px;border-bottom:1px solid var(--line)";
+   list.append(header);
+   previousTeam=team;
+  }
   const card=document.createElement("div");card.className="card";
   const title=document.createElement("b");title.textContent=p.callsign;
   const info=document.createElement("div");info.className="small";
