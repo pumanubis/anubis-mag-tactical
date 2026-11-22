@@ -1,0 +1,55 @@
+name: Validate static PWA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Validate app entry point and PWA manifest
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          index = Path("index.html")
+          manifest = Path("manifest.webmanifest")
+          worker = Path("sw.js")
+
+          for path in (index, manifest, worker):
+              if not path.is_file() or path.stat().st_size == 0:
+                  raise SystemExit(f"ERROR: falta el archivo requerido o está vacío: {path}")
+
+          html = index.read_text(encoding="utf-8")
+          if "<html" not in html.lower():
+              raise SystemExit("ERROR: index.html no contiene la etiqueta html.")
+          if "manifest.webmanifest" not in html:
+              raise SystemExit("ERROR: index.html no referencia manifest.webmanifest.")
+
+          try:
+              data = json.loads(manifest.read_text(encoding="utf-8"))
+          except Exception as exc:
+              raise SystemExit(f"ERROR: manifest.webmanifest no es JSON válido: {exc}")
+
+          for key in ("name", "start_url", "display"):
+              if not data.get(key):
+                  raise SystemExit(f"ERROR: falta el campo obligatorio '{key}' en el manifiesto.")
+
+          print(f"OK: {data['name']} — index.html, manifiesto JSON y sw.js verificados.")
+          PY
